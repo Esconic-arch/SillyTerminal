@@ -1,0 +1,56 @@
+cmake_minimum_required(VERSION 3.21)
+project(SillyTerminal VERSION 0.1.0 LANGUAGES CXX)
+
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+set(CMAKE_AUTOMOC ON)
+
+find_package(Qt6 6.5 REQUIRED COMPONENTS Widgets)
+
+add_library(terminal_core src/terminalcore.cpp src/terminalcore.h)
+target_link_libraries(terminal_core PUBLIC Qt6::Core)
+target_include_directories(terminal_core PUBLIC src)
+qt_add_resources(terminal_core initial_world
+    PREFIX "/initial-world"
+    BASE "${CMAKE_CURRENT_SOURCE_DIR}/assets/initial-world"
+    FILES
+        assets/initial-world/home/guest/notes.txt
+        assets/initial-world/home/guest/documents/welcome.txt
+        "assets/initial-world/home/guest/documents/quick start.txt"
+        assets/initial-world/home/guest/projects/README.md
+        assets/initial-world/home/guest/.config/session.conf
+        assets/initial-world/var/log/boot.log
+)
+
+add_library(vim_editor src/vimeditor.cpp src/vimeditor.h)
+target_link_libraries(vim_editor PUBLIC terminal_core Qt6::Widgets)
+target_include_directories(vim_editor PUBLIC src)
+
+qt_add_executable(SillyTerminal
+    src/main.cpp
+    src/terminalwidget.cpp
+    src/terminalwidget.h
+)
+target_link_libraries(SillyTerminal PRIVATE terminal_core vim_editor Qt6::Widgets)
+set_target_properties(SillyTerminal PROPERTIES
+    WIN32_EXECUTABLE TRUE
+    MACOSX_BUNDLE TRUE
+    MACOSX_BUNDLE_BUNDLE_NAME SillyTerminal
+    MACOSX_BUNDLE_GUI_IDENTIFIER io.esconic.sillyterminal
+    MACOSX_BUNDLE_SHORT_VERSION_STRING ${PROJECT_VERSION}
+)
+
+include(CTest)
+if(BUILD_TESTING)
+    add_executable(terminal_core_tests tests/core_tests.cpp)
+    target_link_libraries(terminal_core_tests PRIVATE terminal_core)
+    add_test(NAME terminal_core COMMAND terminal_core_tests)
+    add_executable(vim_editor_tests tests/vim_tests.cpp)
+    target_link_libraries(vim_editor_tests PRIVATE vim_editor)
+    add_test(NAME vim_editor COMMAND vim_editor_tests)
+    add_test(NAME terminal_ui COMMAND SillyTerminal --smoke-test ${CMAKE_CURRENT_BINARY_DIR}/terminal-preview.png)
+    set_tests_properties(terminal_ui PROPERTIES TIMEOUT 20)
+endif()
+
+install(TARGETS SillyTerminal BUNDLE DESTINATION . RUNTIME DESTINATION .)

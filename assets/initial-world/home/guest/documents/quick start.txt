@@ -1,0 +1,30 @@
+NAVIGATION
+  ls          List this directory
+  ls -a       Include hidden entries
+  cd ..       Go up one level
+  cd ~        Return home
+  cd -        Return to the previous directory
+  pwd         Show the full path
+
+FILES
+  mkdir journals        Create a directory
+  touch todo.txt        Create an empty file
+  edit todo.txt         Edit and save text
+  cp todo.txt copy.txt  Copy a file
+  mv copy.txt old.txt   Move or rename
+  rm old.txt            Delete a file
+  cp -r journals backup Copy a directory
+  rm -r backup          Delete a directory and its contents
+  echo hello > todo.txt Overwrite text
+  echo again >> todo.txt Append a line
+
+READING
+  cat <file>  Read a text file
+  Use quotes around paths containing spaces.
+
+KEYBOARD
+  Up / Down   Command history
+  Tab         Complete a command or path
+  Ctrl+L      Clear the screen
+  Ctrl+C      Cancel input (or copy selected text)
+  F1          Show help

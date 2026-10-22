@@ -1,0 +1,8 @@
+Welcome back, guest.
+
+This is your workspace. Start with:
+  ls
+  cd documents
+  cat welcome.txt
+
+Small steps. Follow your curiosity.

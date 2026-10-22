@@ -1,0 +1,77 @@
+param(
+    [string]$QtRoot,
+    [string]$MinGwRoot
+)
+
+$ErrorActionPreference = 'Stop'
+$taskProjectRoot = Split-Path -Parent $PSScriptRoot
+
+if (-not $QtRoot) {
+    $taskCandidates = @()
+    foreach ($taskInstallRoot in @('D:\Qt', 'C:\Qt', (Join-Path $env:USERPROFILE 'Qt'))) {
+        if (Test-Path -LiteralPath $taskInstallRoot) {
+            $taskCandidates += Get-ChildItem -LiteralPath $taskInstallRoot -Directory |
+                Where-Object { $_.Name -match '^6\.\d+\.\d+$' } |
+                Sort-Object { [version]$_.Name } -Descending |
+                ForEach-Object { Join-Path $_.FullName 'mingw_64' } |
+                Where-Object { Test-Path -LiteralPath (Join-Path $_ 'bin\qmake6.exe') }
+        }
+    }
+    if ($taskCandidates.Count -eq 0) {
+        throw 'Qt 6 MinGW was not found. Pass -QtRoot with the full path to the mingw_64 directory.'
+    }
+    $QtRoot = $taskCandidates[0]
+}
+$QtRoot = (Resolve-Path -LiteralPath $QtRoot).Path
+$taskInstallRoot = Split-Path -Parent (Split-Path -Parent $QtRoot)
+$taskToolsRoot = Join-Path $taskInstallRoot 'Tools'
+$taskCmake = Join-Path $taskToolsRoot 'CMake_64\bin\cmake.exe'
+$taskCtest = Join-Path $taskToolsRoot 'CMake_64\bin\ctest.exe'
+$taskNinja = Join-Path $taskToolsRoot 'Ninja\ninja.exe'
+
+if (-not $MinGwRoot) {
+    $taskCompilers = @(Get-ChildItem -LiteralPath $taskToolsRoot -Directory -Filter 'mingw*' |
+        Where-Object { Test-Path -LiteralPath (Join-Path $_.FullName 'bin\g++.exe') } |
+        Sort-Object Name -Descending)
+    if ($taskCompilers.Count -eq 0) { throw 'Qt MinGW compiler was not found. Pass -MinGwRoot.' }
+    if ($taskCompilers.Count -gt 1) { throw 'Multiple MinGW kits found. Pass -MinGwRoot for the compiler matching this Qt kit.' }
+    $MinGwRoot = $taskCompilers[0].FullName
+}
+$MinGwRoot = (Resolve-Path -LiteralPath $MinGwRoot).Path
+$taskCompiler = Join-Path $MinGwRoot 'bin\g++.exe'
+$taskDeploy = Join-Path $QtRoot 'bin\windeployqt.exe'
+foreach ($taskTool in @($taskCmake, $taskCtest, $taskNinja, $taskCompiler, $taskDeploy)) {
+    if (-not (Test-Path -LiteralPath $taskTool)) { throw "Missing tool: $taskTool" }
+}
+
+$taskBuildDir = Join-Path $taskProjectRoot 'build\windows'
+$taskDistDir = Join-Path $taskProjectRoot 'dist\SillyTerminal'
+$taskOriginalPath = $env:PATH
+$taskOriginalPluginPath = $env:QT_PLUGIN_PATH
+$taskOriginalPlatformPath = $env:QT_QPA_PLATFORM_PLUGIN_PATH
+$taskOriginalPlatform = $env:QT_QPA_PLATFORM
+try {
+    # Only change this process; Anaconda and unrelated MinGW installations remain untouched.
+    $env:PATH = (Join-Path $QtRoot 'bin') + ';' + (Join-Path $MinGwRoot 'bin') + ';' + (Split-Path -Parent $taskNinja) + ';' + $taskOriginalPath
+    $env:QT_PLUGIN_PATH = Join-Path $QtRoot 'plugins'
+    $env:QT_QPA_PLATFORM_PLUGIN_PATH = Join-Path $QtRoot 'plugins\platforms'
+    $env:QT_QPA_PLATFORM = 'windows'
+    Write-Output "Qt: $QtRoot"
+    Write-Output "Compiler: $taskCompiler"
+    & $taskCmake -S $taskProjectRoot -B $taskBuildDir -G Ninja '-DCMAKE_BUILD_TYPE=Release' "-DCMAKE_PREFIX_PATH=$QtRoot" "-DCMAKE_CXX_COMPILER=$taskCompiler" "-DCMAKE_MAKE_PROGRAM=$taskNinja" '-DBUILD_TESTING=ON'
+    if ($LASTEXITCODE -ne 0) { throw 'CMake configuration failed.' }
+    & $taskCmake --build $taskBuildDir --parallel
+    if ($LASTEXITCODE -ne 0) { throw 'Build failed.' }
+    & $taskCtest --test-dir $taskBuildDir --output-on-failure
+    if ($LASTEXITCODE -ne 0) { throw 'Tests failed.' }
+    New-Item -ItemType Directory -Path $taskDistDir -Force | Out-Null
+    Copy-Item -LiteralPath (Join-Path $taskBuildDir 'SillyTerminal.exe') -Destination $taskDistDir -Force
+    & $taskDeploy --release --no-translations --compiler-runtime --dir $taskDistDir (Join-Path $taskDistDir 'SillyTerminal.exe')
+    if ($LASTEXITCODE -ne 0) { throw 'Qt deployment failed.' }
+    Write-Output "Ready: $(Join-Path $taskDistDir 'SillyTerminal.exe')"
+} finally {
+    $env:PATH = $taskOriginalPath
+    $env:QT_PLUGIN_PATH = $taskOriginalPluginPath
+    $env:QT_QPA_PLATFORM_PLUGIN_PATH = $taskOriginalPlatformPath
+    $env:QT_QPA_PLATFORM = $taskOriginalPlatform
+}

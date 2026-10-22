@@ -1,0 +1,10 @@
+/build/
+/build-*/
+/dist/
+# Local virtual-computer data: editable files, session state, and future saves.
+# Initial world content belongs in source/assets, never in this directory.
+/runtime/
+/.qt-check/
+/CMakeUserPresets.json
+*.user
+.DS_Store

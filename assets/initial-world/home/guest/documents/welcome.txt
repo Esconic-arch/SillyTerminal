@@ -1,0 +1,9 @@
+SILLY TERMINAL / FIRST CONTACT
+
+You can explore directories and read files here.
+Try: pwd, ls -a, cd .., or cat "quick start.txt"
+
+There are no missions yet. This is where the story will begin.
+Your files now persist between sessions.
+
+你好，欢迎来到 SillyTerminal。
