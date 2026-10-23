@@ -27,12 +27,24 @@ add_library(vim_editor src/vimeditor.cpp src/vimeditor.h)
 target_link_libraries(vim_editor PUBLIC terminal_core Qt6::Widgets)
 target_include_directories(vim_editor PUBLIC src)
 
+add_library(browser_core src/browsercore.cpp src/browsercore.h)
+target_link_libraries(browser_core PUBLIC Qt6::Core)
+target_include_directories(browser_core PUBLIC src)
+qt_add_resources(browser_core local_sites
+    PREFIX "/sites"
+    BASE "${CMAKE_CURRENT_SOURCE_DIR}/assets/sites"
+    FILES assets/sites/pages.json
+)
+add_library(text_browser src/textbrowser.cpp src/textbrowser.h)
+target_link_libraries(text_browser PUBLIC browser_core Qt6::Widgets)
+target_include_directories(text_browser PUBLIC src)
+
 qt_add_executable(SillyTerminal
     src/main.cpp
     src/terminalwidget.cpp
     src/terminalwidget.h
 )
-target_link_libraries(SillyTerminal PRIVATE terminal_core vim_editor Qt6::Widgets)
+target_link_libraries(SillyTerminal PRIVATE terminal_core vim_editor text_browser Qt6::Widgets)
 set_target_properties(SillyTerminal PROPERTIES
     WIN32_EXECUTABLE TRUE
     MACOSX_BUNDLE TRUE
@@ -49,6 +61,9 @@ if(BUILD_TESTING)
     add_executable(vim_editor_tests tests/vim_tests.cpp)
     target_link_libraries(vim_editor_tests PRIVATE vim_editor)
     add_test(NAME vim_editor COMMAND vim_editor_tests)
+    add_executable(browser_tests tests/browser_tests.cpp)
+    target_link_libraries(browser_tests PRIVATE text_browser terminal_core)
+    add_test(NAME browser COMMAND browser_tests)
     add_test(NAME terminal_ui COMMAND SillyTerminal --smoke-test ${CMAKE_CURRENT_BINARY_DIR}/terminal-preview.png)
     set_tests_properties(terminal_ui PROPERTIES TIMEOUT 20)
 endif()

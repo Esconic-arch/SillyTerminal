@@ -1,12 +1,15 @@
 #include "terminalwidget.h"
 #include "vimeditor.h"
+#include "textbrowser.h"
 
 #include <QApplication>
 #include <QClipboard>
 #include <QContextMenuEvent>
 #include <QDialog>
 #include <QDialogButtonBox>
+#include <QDir>
 #include <QEventLoop>
+#include <QFileInfo>
 #include <QFontComboBox>
 #include <QFontDatabase>
 #include <QFormLayout>
@@ -25,6 +28,7 @@
 #include <QTextBlock>
 #include <QTextBlockFormat>
 #include <QTextCharFormat>
+#include <QTextBrowser>
 #include <QTimer>
 #include <QVBoxLayout>
 
@@ -135,6 +139,7 @@ void TerminalWidget::submit() {
     write("\n", foreground);
     const CommandResult result = m_core.execute(line);
     if (result.clear) { clearScreen(); return; }
+    if (result.openBrowser) openBrowser(result.browserUrl);
     if (!result.editPath.isEmpty()) {
         if (result.useVim) openVim(result.editPath, result.editContent);
         else openEditor(result.editPath, result.editContent);
@@ -278,6 +283,7 @@ void TerminalWidget::applyAppearance(const QFont &chosenFont, int lineSpacing, b
     setTextCursor(originalCursor);
     ensureCursorVisible();
     if (m_vim) m_vim->setAppearance(chosenFont, m_lineSpacing);
+    if (m_browser) m_browser->setAppearance(chosenFont, m_lineSpacing);
     if (save) {
         QSettings settings;
         settings.setValue("appearance/fontFamily", chosenFont.family());
@@ -290,6 +296,22 @@ void TerminalWidget::applyAppearance(const QFont &chosenFont, int lineSpacing, b
 void TerminalWidget::resizeEvent(QResizeEvent *event) {
     QTextEdit::resizeEvent(event);
     if (m_vim) m_vim->setGeometry(rect());
+    if (m_browser) m_browser->setGeometry(rect());
+}
+
+void TerminalWidget::openBrowser(const QString &address) {
+    QEventLoop loop;
+    const QString stateFile = QFileInfo(m_core.worldRoot()).dir().filePath("browser.json");
+    m_browser = new TextBrowser(stateFile, address, font(), m_lineSpacing, [&loop] { loop.quit(); }, this);
+    m_browser->setGeometry(rect());
+    m_browser->show();
+    m_browser->raise();
+    m_browser->focusPage();
+    loop.exec();
+    delete m_browser;
+    m_browser = nullptr;
+    write("Browser closed.\n", muted);
+    setFocus();
 }
 
 void TerminalWidget::openVim(const QString &path, const QString &content) {
@@ -471,18 +493,18 @@ bool TerminalWidget::smokeTest(const QString &appearancePreviewPath) {
     runCommand("ls");
     runCommand("cd documents");
     runCommand("cat welcome.txt");
-    if (!toPlainText().contains(QString::fromUtf8("你好")) || !toPlainText().endsWith("~/documents$ ")) return false;
+    if (!toPlainText().contains(QString::fromUtf8("你好")) || !toPlainText().endsWith("~/documents$ ")) { qWarning("UI smoke check failed at line %d", __LINE__); return false; }
     setInput("draft");
     QKeyEvent up(QEvent::KeyPress, Qt::Key_Up, Qt::NoModifier);
     keyPressEvent(&up);
-    if (currentInput() != "cat welcome.txt") return false;
+    if (currentInput() != "cat welcome.txt") { qWarning("UI smoke check failed at line %d", __LINE__); return false; }
     QKeyEvent down(QEvent::KeyPress, Qt::Key_Down, Qt::NoModifier);
     keyPressEvent(&down);
-    if (currentInput() != "draft") return false;
+    if (currentInput() != "draft") { qWarning("UI smoke check failed at line %d", __LINE__); return false; }
     setInput("pw");
     QKeyEvent tab(QEvent::KeyPress, Qt::Key_Tab, Qt::NoModifier);
     keyPressEvent(&tab);
-    if (currentInput() != "pwd ") return false;
+    if (currentInput() != "pwd ") { qWarning("UI smoke check failed at line %d", __LINE__); return false; }
     setInput("");
     const QString transcript = toPlainText();
     auto cursor = textCursor();
@@ -490,19 +512,19 @@ bool TerminalWidget::smokeTest(const QString &appearancePreviewPath) {
     setTextCursor(cursor);
     QKeyEvent backspace(QEvent::KeyPress, Qt::Key_Backspace, Qt::NoModifier);
     keyPressEvent(&backspace);
-    if (toPlainText() != transcript) return false;
+    if (toPlainText() != transcript) { qWarning("UI smoke check failed at line %d", __LINE__); return false; }
     QKeyEvent wordDelete(QEvent::KeyPress, Qt::Key_Backspace, Qt::ControlModifier);
     keyPressEvent(&wordDelete);
-    if (toPlainText() != transcript) return false;
+    if (toPlainText() != transcript) { qWarning("UI smoke check failed at line %d", __LINE__); return false; }
     QInputMethodEvent chineseInput;
     chineseInput.setCommitString(QString::fromUtf8("中文输入"));
     inputMethodEvent(&chineseInput);
-    if (currentInput() != QString::fromUtf8("中文输入")) return false;
+    if (currentInput() != QString::fromUtf8("中文输入")) { qWarning("UI smoke check failed at line %d", __LINE__); return false; }
     setInput("");
     QMimeData paste;
     paste.setText("one\ntwo");
     insertFromMimeData(&paste);
-    if (currentInput() != "one two") return false;
+    if (currentInput() != "one two") { qWarning("UI smoke check failed at line %d", __LINE__); return false; }
     setInput("");
     runCommand("pwd");
     // The smoke-test process redirects preferences to a build-local INI store.
@@ -533,7 +555,7 @@ bool TerminalWidget::smokeTest(const QString &appearancePreviewPath) {
     });
     showAppearanceSettings();
     if (!dialogChecked || font() != savedFont || m_lineSpacing != savedSpacing
-        || toPlainText() != savedTranscript || currentInput() != "echo pending") return false;
+        || toPlainText() != savedTranscript || currentInput() != "echo pending") { qWarning("UI smoke check failed at line %d", __LINE__); return false; }
     bool saved = false;
     QTimer::singleShot(100, this, [&saved] {
         auto *dialog = qobject_cast<QDialog *>(QApplication::activeModalWidget());
@@ -548,10 +570,10 @@ bool TerminalWidget::smokeTest(const QString &appearancePreviewPath) {
         } else dialog->reject();
     });
     showAppearanceSettings();
-    if (!saved) return false;
+    if (!saved) { qWarning("UI smoke check failed at line %d", __LINE__); return false; }
     TerminalWidget reloaded(nullptr, m_core.worldRoot());
     if (reloaded.font().pointSize() != 14 || reloaded.m_lineSpacing != 125
-        || toPlainText() != savedTranscript) return false;
+        || toPlainText() != savedTranscript) { qWarning("UI smoke check failed at line %d", __LINE__); return false; }
     applyAppearance(savedFont, savedSpacing, true);
     setInput("");
     bool editorSaved = false;
@@ -570,13 +592,13 @@ bool TerminalWidget::smokeTest(const QString &appearancePreviewPath) {
     });
     runCommand("edit editor-check.txt");
     if (!editorSaved || m_core.execute("cat editor-check.txt").text
-        != QString::fromUtf8("Saved from the editor.\n你好，终端。\n")) return false;
+        != QString::fromUtf8("Saved from the editor.\n你好，终端。\n")) { qWarning("UI smoke check failed at line %d", __LINE__); return false; }
     QTimer::singleShot(100, this, [] {
         auto *dialog = qobject_cast<QDialog *>(QApplication::activeModalWidget());
         if (dialog) dialog->reject();
     });
     runCommand("edit cancelled.txt");
-    if (!m_core.execute("cat cancelled.txt").error) return false;
+    if (!m_core.execute("cat cancelled.txt").error) { qWarning("UI smoke check failed at line %d", __LINE__); return false; }
     runCommand("cat editor-check.txt");
     bool vimChecked = false;
     QTimer::singleShot(100, this, [this, &vimChecked, appearancePreviewPath] {
@@ -601,7 +623,38 @@ bool TerminalWidget::smokeTest(const QString &appearancePreviewPath) {
     });
     runCommand("vim vim-check.txt");
     if (!vimChecked || m_core.execute("cat vim-check.txt").text
-        != QString::fromUtf8("A note written in vim.\n你好，Vim。\n")) return false;
+        != QString::fromUtf8("A note written in vim.\n你好，Vim。\n")) { qWarning("UI smoke check failed at line %d", __LINE__); return false; }
     runCommand("cat vim-check.txt");
+    bool browserChecked = false;
+    QTimer::singleShot(100, this, [this, &browserChecked, appearancePreviewPath] {
+        auto *view = m_browser ? m_browser->findChild<QTextBrowser *>("browserPage") : nullptr;
+        auto *address = m_browser ? m_browser->findChild<QLineEdit *>("browserAddress") : nullptr;
+        if (!view || !address) return;
+        QKeyEvent enter(QEvent::KeyPress, Qt::Key_Return, Qt::NoModifier);
+        QCoreApplication::sendEvent(view, &enter);
+        browserChecked = view->toPlainText().contains("DAYBREAK");
+        if (!appearancePreviewPath.isEmpty())
+            browserChecked = m_browser->grab().save(appearancePreviewPath + ".website.png") && browserChecked;
+        QKeyEvent down(QEvent::KeyPress, Qt::Key_Down, Qt::NoModifier);
+        QCoreApplication::sendEvent(view, &down);
+        QCoreApplication::sendEvent(view, &enter);
+        browserChecked = browserChecked && address->text() == "https://www.daybreak.news/culture/bookshop";
+        QKeyEvent back(QEvent::KeyPress, Qt::Key_Left, Qt::AltModifier);
+        QCoreApplication::sendEvent(view, &back);
+        browserChecked = browserChecked && view->toPlainText().contains("DAYBREAK");
+        address->setText("linnotes.me/about");
+        QCoreApplication::sendEvent(address, &enter);
+        browserChecked = browserChecked && address->text() == "https://linnotes.me/about";
+        address->setText(BrowserCore::homeUrl());
+        QCoreApplication::sendEvent(address, &enter);
+        if (!appearancePreviewPath.isEmpty())
+            browserChecked = m_browser->grab().save(appearancePreviewPath + ".browser.png") && browserChecked;
+        QKeyEvent quit(QEvent::KeyPress, Qt::Key_Q, Qt::NoModifier, "q");
+        QCoreApplication::sendEvent(view, &quit);
+    });
+    runCommand("browser");
+    BrowserCore restoredBrowser(QFileInfo(m_core.worldRoot()).dir().filePath("browser.json"));
+    if (!browserChecked || restoredBrowser.currentUrl() != BrowserCore::homeUrl()
+        || !toPlainText().contains("A note written in vim.")) { qWarning("UI smoke check failed at line %d", __LINE__); return false; }
     return true;
 }

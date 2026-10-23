@@ -7,6 +7,7 @@ class QInputMethodEvent;
 class QKeyEvent;
 class QMimeData;
 class VimEditor;
+class TextBrowser;
 
 class TerminalWidget : public QTextEdit {
 public:
@@ -31,6 +32,7 @@ private:
     QString m_draft;
     int m_lineSpacing = 115;
     VimEditor *m_vim = nullptr;
+    TextBrowser *m_browser = nullptr;
 
     QString currentInput() const;
     void setInput(const QString &text);
@@ -43,4 +45,5 @@ private:
     void applyAppearance(const QFont &font, int lineSpacing, bool save);
     void openEditor(const QString &path, const QString &content);
     void openVim(const QString &path, const QString &content);
+    void openBrowser(const QString &address);
 };

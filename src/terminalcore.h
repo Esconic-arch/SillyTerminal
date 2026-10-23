@@ -11,6 +11,8 @@ struct CommandResult {
     QString editPath;
     QString editContent;
     bool useVim = false;
+    bool openBrowser = false;
+    QString browserUrl;
 };
 
 struct Completion {

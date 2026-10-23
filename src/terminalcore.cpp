@@ -15,7 +15,7 @@
 #include <algorithm>
 
 namespace {
-const QStringList commands = {"cat", "cd", "clear", "cp", "echo", "edit", "help", "ls",
+const QStringList commands = {"browser", "cat", "cd", "clear", "cp", "echo", "edit", "help", "ls",
     "mkdir", "mv", "pwd", "rm", "touch", "vim", "whoami"};
 CommandResult fail(const QString &message) { return {message, true, false}; }
 #ifdef Q_OS_WIN
@@ -374,9 +374,17 @@ CommandResult TerminalCore::execute(const QString &line) {
         return writeFile(resolve(args.last()), args.mid(0, redirect).join(' ') + '\n', tokens.at(redirect).text == ">>");
     }
     if (command == "echo") return {args.join(' ')};
+    if (command == "browser") {
+        if (args.size() > 1) return fail("usage: browser [https://site/path]");
+        CommandResult result;
+        result.openBrowser = true;
+        if (!args.isEmpty()) result.browserUrl = args.first();
+        return result;
+    }
     if (command == "help") {
         if (!args.isEmpty()) return fail("usage: help");
         return {"AVAILABLE COMMANDS\n\n"
+            "  browser [address]    Open the web browser\n"
             "  ls [-a] [path]       List files and directories\n"
             "  cd [path]            Change directory; no path returns home\n"
             "  pwd                  Print the current directory\n"

@@ -50,6 +50,7 @@ guest@silly:~$ cat /var/log/boot.log
 | `touch <文件>` | 创建空文件，或更新时间；不清空已有内容 |
 | `edit <文件>` | 打开内置文本编辑器，也可以新建文件 |
 | `vim <文件>` | 在终端区域中使用简易 Vim 编辑文本 |
+| `browser [地址]` | 打开浏览器，省略地址进入收藏页 |
 | `mv <源> <目标>` | 移动或重命名文件、目录 |
 | `cp [-r] <源> <目标>` | 复制文件；`-r` 复制目录及其内容 |
 | `rm [-r] <路径>` | 删除文件；`-r` 删除目录及其内容 |
@@ -113,6 +114,41 @@ rm journals/old.txt
 
 这是模拟的 Vim 常用功能子集，不是系统 Vim：暂不支持数字次数（例如 `3dd`）、可视模式、正则搜索、替换、宏、插件或另存为。搜索按普通文字匹配；`w` / `b` 使用 Qt 的单词边界。编辑窗口会把换行显示为统一的换行符，明确保存时以 UTF-8、LF 换行写入。
 
+### 纯文字浏览器
+
+输入以下任意一条命令即可进入浏览器，退出后恢复原来的终端记录和当前目录：
+
+```text
+browser
+browser https://www.daybreak.news/
+browser bbs.afterhours.net
+browser linnotes.me/posts/nightwalk
+```
+
+不带地址打开时显示 **Favorites** 收藏页，初始收藏包括新闻站 **Daybreak**、论坛 **After Hours** 和个人博客 **林的备忘录**。网站里有新闻、讨论和随笔，共 11 个网页；加上收藏页共 12 页。页面只供阅读，没有登录、发帖或下载功能。页面内容属于游戏世界，不是现实新闻。
+
+| 操作 | 按键 |
+| --- | --- |
+| 选择上一个 / 下一个链接 | `↑` / `↓`、`Shift+Tab` / `Tab` |
+| 打开选中的链接 | `Enter` / `→`，或鼠标点击 |
+| 按编号直接打开链接 | 数字 `1`–`9` |
+| 后退 | `←`、`Backspace`、`Alt+←` |
+| 前进 | `Alt+→` |
+| 输入地址 | `G`、`Ctrl+L`（macOS 也可用 `Command+L`），输入后回车 |
+| 取消地址输入，回到页面 | 地址框里按 `Esc` |
+| 返回收藏页 | `H`，或顶部 **Home** |
+| 添加 / 移除当前页收藏 | 地址栏旁的星标，或 `Ctrl+D` / `Command+D` |
+| 刷新当前页面 | `R`、`F5`，或顶部刷新按钮 |
+| 查看快捷键 | `F1` |
+| 滚动长页面 | 鼠标滚轮、`PageUp` / `PageDown` |
+| 退出回到终端 | 页面中按 `Q` / `Esc`，或顶部 **Quit** |
+
+地址使用普通网址样式，例如 `https://www.daybreak.news/city/late-train`，也可省略协议输入 `daybreak.news`。这些域名由游戏内部路由到内置网页，不访问真实互联网或 DNS；地址中的 `https://` 只是模拟地址格式。未知域名显示连接失败，已知站点中不存在的路径显示 404。收藏页使用浏览器内部地址 `about:bookmarks`。旧版 `intranet://` 地址和已有历史会自动映射到对应的新网站。
+
+收藏、访问记录和当前位置保存在 `runtime/browser.json`，保留最近 100 条历史和最多 100 条收藏。每次不带地址打开都会进入收藏页，之前访问过的页面仍可通过后退访问；不保存每页滚动位置。这些个人数据由 `.gitignore` 排除。测试使用独立的临时目录，不访问你的浏览记录或运行文件。
+
+网页内容位于 `assets/sites/pages.json`，顶层 `bookmarks` 数组定义初始收藏，每个网页包含 `url`、`title`、`subtitle`、`paragraphs` 和 `links`。链接可以指向同站路径（例如 `/city/late-train`），也可以指向其他站点的完整伪域名地址。修改 JSON 并重新构建即可更新网站，不需要服务器；初始收藏不会覆盖已保存的个人收藏。页面数据会作为纯文字转义后显示，不执行 HTML、JavaScript 或外部资源。
+
 `cp` 和 `mv` 的目标如果是目录，会放入该目录并保留原文件名；目标文件已存在时会报错，不覆盖。删除目录需要明确使用 `rm -r`。当前所在目录、它的父目录和世界根目录不能被删除或移动。当前每条文件命令接受一个源或目标组合，不支持通配符；输出重定向目前仅支持 `echo`，引号里的 `>` 和 `>>` 是普通文字。
 
 快捷键：
@@ -132,7 +168,7 @@ rm journals/old.txt
 
 ## 运行数据与 Git
 
-在当前项目中运行时，本地电脑数据位于项目根目录的 `runtime/` 下：`runtime/world/` 保存玩家使用、修改后的文件，`runtime/session.json` 保存当前目录。整个目录已被 `.gitignore` 排除，普通的 `git add .` 不会将其加入提交。已有的 `build/` 和 `dist/` 也继续忽略。
+在当前项目中运行时，本地电脑数据位于项目根目录的 `runtime/` 下：`runtime/world/` 保存玩家使用、修改后的文件，`runtime/session.json` 保存当前目录，`runtime/browser.json` 保存收藏和浏览记录。整个目录已被 `.gitignore` 排除，普通的 `git add .` 不会将其加入提交。已有的 `build/` 和 `dist/` 也继续忽略。
 
 初始内容位于 `assets/initial-world/`，纳入版本管理并在构建时嵌入程序。首次启动且 `runtime/world/` 不存在时，程序从初始内容建立一份运行副本；之后只读写运行副本。修改模板后需重新构建，模板更新只影响尚未建立世界的新副本。
 
@@ -182,10 +218,14 @@ Windows 版本已经在当前电脑实际编译、测试。macOS 源码兼容性
 src/main.cpp             窗口、配色与程序入口
 src/terminalwidget.*     连续终端界面、输入保护、历史与补全交互
 src/vimeditor.*          终端内的简易 Vim，模式、编辑与搜索
+src/browsercore.*        伪域名路由、收藏、历史导航和持久化
+src/textbrowser.*        纯文字浏览器界面、链接和键盘操作
 src/terminalcore.*       命令解析、受限文件读写和持久化
 assets/initial-world/   初始电脑内容，构建时嵌入程序
+assets/sites/pages.json 本地网站的页面内容与链接
 tests/core_tests.cpp     命令和文件系统行为测试
 tests/vim_tests.cpp      Vim 按键、保存、退出和持久化测试
+tests/browser_tests.cpp  网站路由、链接、历史和浏览器交互测试
 scripts/build.ps1       Windows 构建、测试与运行依赖打包
 CMakeLists.txt          Windows / macOS 共用的构建配置
 ```
