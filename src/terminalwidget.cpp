@@ -490,6 +490,10 @@ void TerminalWidget::contextMenuEvent(QContextMenuEvent *event) {
 }
 
 bool TerminalWidget::smokeTest(const QString &appearancePreviewPath) {
+    if (!m_core.initializationError().isEmpty()) {
+        qWarning("UI smoke world initialization failed: %s", qPrintable(m_core.initializationError()));
+        return false;
+    }
     runCommand("ls");
     runCommand("cd documents");
     runCommand("cat welcome.txt");
@@ -638,13 +642,41 @@ bool TerminalWidget::smokeTest(const QString &appearancePreviewPath) {
         QKeyEvent down(QEvent::KeyPress, Qt::Key_Down, Qt::NoModifier);
         QCoreApplication::sendEvent(view, &down);
         QCoreApplication::sendEvent(view, &enter);
-        browserChecked = browserChecked && address->text() == "https://www.daybreak.news/culture/bookshop";
+        browserChecked = browserChecked && address->text() == "https://www.daybreak.news/about";
         QKeyEvent back(QEvent::KeyPress, Qt::Key_Left, Qt::AltModifier);
         QCoreApplication::sendEvent(view, &back);
         browserChecked = browserChecked && view->toPlainText().contains("DAYBREAK");
         address->setText("linnotes.me/about");
         QCoreApplication::sendEvent(address, &enter);
         browserChecked = browserChecked && address->text() == "https://linnotes.me/about";
+        address->setText("bbs.afterhours.net");
+        QCoreApplication::sendEvent(address, &enter);
+        if (!appearancePreviewPath.isEmpty())
+            browserChecked = m_browser->grab().save(appearancePreviewPath + ".forum.png") && browserChecked;
+        if (!appearancePreviewPath.isEmpty()) {
+            const QSize original = m_browser->size();
+            m_browser->resize(560, 360);
+            browserChecked = m_browser->grab().save(appearancePreviewPath + ".narrow.png") && browserChecked;
+            m_browser->resize(original);
+        }
+        address->setText("bbs.afterhours.net/t/47");
+        QCoreApplication::sendEvent(address, &enter);
+        if (!appearancePreviewPath.isEmpty())
+            browserChecked = m_browser->grab().save(appearancePreviewPath + ".thread.png") && browserChecked;
+        address->setText("linnotes.me");
+        QCoreApplication::sendEvent(address, &enter);
+        if (!appearancePreviewPath.isEmpty())
+            browserChecked = m_browser->grab().save(appearancePreviewPath + ".blog.png") && browserChecked;
+        address->setText("hcmetro.com");
+        QCoreApplication::sendEvent(address, &enter);
+        browserChecked = browserChecked && address->text() == "https://www.hcmetro.com/";
+        if (!appearancePreviewPath.isEmpty())
+            browserChecked = m_browser->grab().save(appearancePreviewPath + ".transit.png") && browserChecked;
+        address->setText("hcmetro.com/lines/loop");
+        QCoreApplication::sendEvent(address, &enter);
+        browserChecked = browserChecked && address->text() == "https://www.hcmetro.com/lines/loop";
+        if (!appearancePreviewPath.isEmpty())
+            browserChecked = m_browser->grab().save(appearancePreviewPath + ".timetable.png") && browserChecked;
         address->setText(BrowserCore::homeUrl());
         QCoreApplication::sendEvent(address, &enter);
         if (!appearancePreviewPath.isEmpty())

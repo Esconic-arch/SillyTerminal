@@ -13,6 +13,7 @@ struct BrowserPage {
     QStringList paragraphs;
     QList<BrowserLink> links;
     bool found = false;
+    QString html;
 };
 
 class BrowserCore {
@@ -31,6 +32,7 @@ public:
     bool isBookmarked() const;
     bool toggleBookmark();
     static QString homeUrl() { return QStringLiteral("about:bookmarks"); }
+    static QString helpUrl() { return QStringLiteral("about:help"); }
 
 private:
     QMap<QString, BrowserPage> m_pages;

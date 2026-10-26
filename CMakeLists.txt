@@ -33,7 +33,37 @@ target_include_directories(browser_core PUBLIC src)
 qt_add_resources(browser_core local_sites
     PREFIX "/sites"
     BASE "${CMAKE_CURRENT_SOURCE_DIR}/assets/sites"
-    FILES assets/sites/pages.json
+    FILES
+        assets/sites/pages.json
+        assets/sites/daybreak/index.html
+        assets/sites/daybreak/train.html
+        assets/sites/daybreak/bookshop.html
+        assets/sites/daybreak/about.html
+        assets/sites/forum/index.html
+        assets/sites/forum/chat.html
+        assets/sites/forum/audio.html
+        assets/sites/forum/computers.html
+        assets/sites/forum/t-112.html
+        assets/sites/forum/t-81.html
+        assets/sites/forum/t-47.html
+        assets/sites/forum/t-109.html
+        assets/sites/forum/u-moss.html
+        assets/sites/forum/u-slowtrain.html
+        assets/sites/forum/u-needle.html
+        assets/sites/forum/u-side_b.html
+        assets/sites/forum/u-rust.html
+        assets/sites/forum/u-bottleneck.html
+        assets/sites/forum/u-lin.html
+        assets/sites/forum/about.html
+        assets/sites/lin/index.html
+        assets/sites/lin/nightwalk.html
+        assets/sites/lin/about.html
+        assets/sites/transit/index.html
+        assets/sites/transit/loop.html
+        assets/sites/transit/nanqiao.html
+        assets/sites/transit/notices.html
+        assets/sites/transit/late-service.html
+        assets/sites/transit/escalator.html
 )
 add_library(text_browser src/textbrowser.cpp src/textbrowser.h)
 target_link_libraries(text_browser PUBLIC browser_core Qt6::Widgets)
@@ -65,7 +95,7 @@ if(BUILD_TESTING)
     target_link_libraries(browser_tests PRIVATE text_browser terminal_core)
     add_test(NAME browser COMMAND browser_tests)
     add_test(NAME terminal_ui COMMAND SillyTerminal --smoke-test ${CMAKE_CURRENT_BINARY_DIR}/terminal-preview.png)
-    set_tests_properties(terminal_ui PROPERTIES TIMEOUT 20)
+    set_tests_properties(terminal_ui PROPERTIES TIMEOUT 20 ENVIRONMENT "QT_FORCE_STDERR_LOGGING=1")
 endif()
 
 install(TARGETS SillyTerminal BUNDLE DESTINATION . RUNTIME DESTINATION .)

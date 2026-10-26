@@ -9,11 +9,57 @@
 #include <QSaveFile>
 #include <QSet>
 #include <QUrl>
+#include <QXmlStreamReader>
+#include <QXmlStreamWriter>
+
+namespace {
+// Authored XHTML supplies structure; the browser controls typography and links.
+bool readDocument(const QByteArray &source, BrowserPage &page) {
+    QXmlStreamReader reader(source);
+    QXmlStreamWriter writer(&page.html);
+    const QSet<QString> tags = {"html", "body", "h1", "h2", "h3", "p", "br", "hr", "b", "strong", "i", "em",
+        "ul", "ol", "li", "table", "tr", "td", "th", "pre", "blockquote", "a", "span"};
+    const QSet<QString> attributes = {"colspan", "rowspan", "border", "cellpadding", "cellspacing", "width", "align", "class"};
+    int link = -1;
+    while (!reader.atEnd()) {
+        reader.readNext();
+        if (reader.isDTD() || reader.isEntityReference()) return false;
+        if (reader.isStartElement()) {
+            const QString tag = reader.name().toString();
+            if (!tags.contains(tag)) return false;
+            writer.writeStartElement(tag);
+            if (tag == "a") {
+                if (link >= 0) return false;
+                const QUrl target = QUrl(page.url).resolved(QUrl(reader.attributes().value("href").toString()));
+                if (!target.isValid() || (target.scheme() != "https" && target.scheme() != "http" && target.scheme() != "about")) return false;
+                link = page.links.size();
+                page.links.append({{}, target.toString(QUrl::FullyEncoded)});
+                writer.writeAttribute("href", "browser-link:" + QString::number(link));
+                writer.writeCharacters(QString("[%1] ").arg(link + 1));
+            } else {
+                for (const auto &attribute : reader.attributes())
+                    if (attributes.contains(attribute.name().toString())) writer.writeAttribute(attribute.name().toString(), attribute.value().toString());
+            }
+        } else if (reader.isEndElement()) {
+            if (reader.name() == QLatin1String("a")) {
+                page.links[link].label = page.links.at(link).label.simplified();
+                link = -1;
+            }
+            writer.writeEndElement();
+        } else if (reader.isCharacters()) {
+            writer.writeCharacters(reader.text().toString());
+            if (link >= 0) page.links[link].label += reader.text();
+        }
+    }
+    return !reader.hasError() && !page.html.isEmpty();
+}
+}
 
 QString BrowserCore::normalize(const QString &address, const QString &base, QString &error) {
     QString input = address.trimmed();
     if (input.isEmpty()) { error = "Enter a website address."; return {}; }
     if (input.compare(homeUrl(), Qt::CaseInsensitive) == 0) return homeUrl();
+    if (input.compare(helpUrl(), Qt::CaseInsensitive) == 0) return helpUrl();
     for (const auto ch : input) {
         if (ch.isSpace() || ch.unicode() < 32) { error = "An address cannot contain whitespace."; return {}; }
     }
@@ -51,6 +97,7 @@ QString BrowserCore::normalize(const QString &address, const QString &base, QStr
     if (host == "daybreak.news") host = "www.daybreak.news";
     if (host == "afterhours.net") host = "bbs.afterhours.net";
     if (host == "www.linnotes.me") host = "linnotes.me";
+    if (host == "hcmetro.com") host = "www.hcmetro.com";
     if (!host.contains('.')) host += ".invalid";
     url.setScheme("https");
     url.setHost(host);
@@ -68,7 +115,7 @@ BrowserCore::BrowserCore(const QString &stateFile) : m_stateFile(stateFile) {
             const auto link = value.toObject();
             QString error;
             const QString url = normalize(link.value("url").toString(), homeUrl(), error);
-            if (error.isEmpty() && url != homeUrl()) m_bookmarks.append({link.value("label").toString(), url});
+            if (error.isEmpty() && QUrl(url).scheme() != "about") m_bookmarks.append({link.value("label").toString(), url});
         }
         for (const auto &value : data.value("pages").toArray()) {
             const auto object = value.toObject();
@@ -78,6 +125,11 @@ BrowserCore::BrowserCore(const QString &stateFile) : m_stateFile(stateFile) {
             if (!error.isEmpty()) continue;
             page.title = object.value("title").toString();
             page.subtitle = object.value("subtitle").toString();
+            const QString document = object.value("document").toString();
+            if (!document.isEmpty()) {
+                QFile body(":/sites/" + document);
+                if (!body.open(QIODevice::ReadOnly) || !readDocument(body.readAll(), page)) continue;
+            }
             for (const auto &paragraph : object.value("paragraphs").toArray()) page.paragraphs.append(paragraph.toString());
             for (const auto &linkValue : object.value("links").toArray()) {
                 const auto link = linkValue.toObject();
@@ -100,7 +152,7 @@ BrowserCore::BrowserCore(const QString &stateFile) : m_stateFile(stateFile) {
                     const auto link = entry.toObject();
                     QString error;
                     const QString url = normalize(link.value("url").toString(), homeUrl(), error);
-                    if (!error.isEmpty() || url == homeUrl() || seen.contains(url) || m_bookmarks.size() >= 100) continue;
+                    if (!error.isEmpty() || QUrl(url).scheme() == "about" || seen.contains(url) || m_bookmarks.size() >= 100) continue;
                     seen.insert(url);
                     m_bookmarks.append({link.value("label").toString(url), url});
                 }
@@ -162,6 +214,10 @@ bool BrowserCore::forward() {
 BrowserPage BrowserCore::currentPage() const {
     if (currentUrl() == homeUrl()) return {homeUrl(), "Favorites", {},
         m_bookmarks.isEmpty() ? QStringList{"No bookmarks."} : QStringList{}, m_bookmarks, true};
+    if (currentUrl() == helpUrl()) return {helpUrl(), "Browser help", {},
+        {"Navigation\nTab / Shift+Tab, Up / Down: select link\nEnter / Right: follow link\nDigits, then Enter: follow link number\nEsc: cancel link number\nLeft / Backspace / Alt+Left: back\nAlt+Right: forward",
+         "Address and bookmarks\nG / Ctrl+L / Command+L: edit address\nH: bookmarks\nCtrl+D / Command+D: add or remove bookmark\nR / F5: reload",
+         "Reading\nSpace / PageDown: next screen\nPageUp: previous screen\nHome / End: top / bottom\nF1 / ?: this help page\nQ / Esc: return to terminal"}, {{"Bookmarks", homeUrl()}}, true};
     const QUrl url(currentUrl());
     const QString key = url.adjusted(QUrl::RemoveQuery | QUrl::RemoveFragment).toString(QUrl::FullyEncoded);
     if (m_pages.contains(key)) {
@@ -185,7 +241,7 @@ bool BrowserCore::isBookmarked() const {
 
 bool BrowserCore::toggleBookmark() {
     m_error.clear();
-    if (currentUrl() == homeUrl() || !currentPage().found) { m_error = "This page can't be bookmarked."; return false; }
+    if (QUrl(currentUrl()).scheme() == "about" || !currentPage().found) { m_error = "This page can't be bookmarked."; return false; }
     for (int i = 0; i < m_bookmarks.size(); ++i) {
         if (m_bookmarks.at(i).url == currentUrl()) { m_bookmarks.removeAt(i); saveState(); return true; }
     }

@@ -15,6 +15,9 @@
 #include <QSet>
 #include <QTemporaryDir>
 #include <QTextBrowser>
+#include <QScrollBar>
+#include <QTextTable>
+#include <QTextBlock>
 #include <QUrl>
 #include <cstdio>
 
@@ -22,6 +25,21 @@ namespace {
 void key(QWidget *target, int code, const QString &text = {}, Qt::KeyboardModifiers modifiers = Qt::NoModifier) {
     QKeyEvent event(QEvent::KeyPress, code, modifiers, text);
     QCoreApplication::sendEvent(target, &event);
+}
+int linkTo(const BrowserCore &core, const QString &suffix) {
+    const auto links = core.currentPage().links;
+    for (int i = 0; i < links.size(); ++i) if (links.at(i).url.endsWith(suffix)) return i;
+    return -1;
+}
+void go(QLineEdit *address, const QString &url) {
+    address->setText(url);
+    key(address, Qt::Key_Return);
+}
+void number(TextBrowser &browser, QTextBrowser *view, int value) {
+    key(view, Qt::Key_0, "0");
+    auto *input = browser.findChild<QLineEdit *>("browserLinkNumber");
+    input->setText(QString::number(value));
+    key(input, Qt::Key_Return);
 }
 }
 
@@ -38,7 +56,7 @@ int main(int argc, char **argv) {
     check(!core.canBack() && !core.canForward(), "initial navigation boundaries");
     check(core.navigate("daybreak.news"), "short host address");
     check(core.currentUrl() == "https://www.daybreak.news/", "host normalized to root");
-    check(core.follow(0) && core.currentUrl() == "https://www.daybreak.news/city/late-train", "relative hyperlink navigation");
+    check(core.follow(linkTo(core, "/city/late-train")) && core.currentUrl() == "https://www.daybreak.news/city/late-train", "relative hyperlink navigation");
     check(core.back() && core.currentUrl() == "https://www.daybreak.news/", "back returns to previous page");
     check(core.forward() && core.currentUrl() == "https://www.daybreak.news/city/late-train", "forward navigation");
     core.back();
@@ -80,7 +98,15 @@ int main(int argc, char **argv) {
             if (!visited.contains(core.currentUrl())) pending.append(core.currentUrl());
         }
     }
-    check(visited.size() == 12, "all twelve pages are reachable");
+    check(visited.size() == 30, "all authored pages and favorites are reachable");
+    BrowserCore transit;
+    check(transit.navigate("hcmetro.com") && transit.currentPage().found
+        && transit.currentUrl() == "https://www.hcmetro.com/", "transit domain opens without www or scheme");
+    check(!transit.isBookmarked(), "transit website is not a default bookmark");
+    transit.navigate("daybreak.news/city/late-train");
+    check(transit.follow(linkTo(transit, "/notices/2026-10-22-late-service"))
+        && transit.currentUrl() == "https://www.hcmetro.com/notices/2026-10-22-late-service"
+        && transit.currentPage().found, "news article links to the operator's original notice");
     BrowserCore bounded;
     for (int i = 0; i < 130; ++i) bounded.navigate(i % 2 ? BrowserCore::homeUrl() : "daybreak.news");
     int backCount = 0;
@@ -93,7 +119,7 @@ int main(int argc, char **argv) {
     {
         BrowserCore saved(statePath);
         saved.navigate("daybreak.news");
-        saved.follow(1);
+        saved.follow(linkTo(saved, "/culture/bookshop"));
         saved.back();
         check(saved.storageError().isEmpty() && QFile::exists(statePath), "history saved on disk");
     }
@@ -142,24 +168,55 @@ int main(int argc, char **argv) {
     auto *address = widget.findChild<QLineEdit *>("browserAddress");
     check(view && address && view->isReadOnly(), "read-only browser UI created");
     check(view->toPlainText().contains("Favorites") && view->toPlainText().contains("https://linnotes.me/"), "favorites rendered with website addresses");
-    check(widget.findChild<QLabel *>("browserStatus")->text() == BrowserCore::homeUrl(), "status bar contains address without instructions");
+    check(widget.findChild<QLabel *>("browserStatus")->text() == "https://www.daybreak.news/", "status bar shows selected link target");
     auto *star = widget.findChild<QPushButton *>("browserBookmark");
     check(star && !star->isEnabled(), "internal page bookmark control disabled");
     key(view, Qt::Key_Return);
     check(address->text() == "https://www.daybreak.news/", "enter opens selected link");
     key(view, Qt::Key_Down);
     key(view, Qt::Key_Return);
-    check(address->text() == "https://www.daybreak.news/culture/bookshop", "arrow selects next link");
+    check(address->text() == "https://www.daybreak.news/about", "arrow selects inline navigation link");
     key(view, Qt::Key_Left);
     check(address->text() == "https://www.daybreak.news/", "left goes back");
     key(view, Qt::Key_Right, {}, Qt::AltModifier);
-    check(address->text() == "https://www.daybreak.news/culture/bookshop", "alt-right goes forward");
+    check(address->text() == "https://www.daybreak.news/about", "alt-right goes forward");
     key(view, Qt::Key_H, "h");
-    key(view, Qt::Key_Tab);
-    key(view, Qt::Key_Return);
-    check(address->text() == "https://bbs.afterhours.net/", "tab selects next site");
-    key(view, Qt::Key_2, "2");
-    check(address->text() == "https://bbs.afterhours.net/t/81", "number opens matching link");
+    number(widget, view, 2);
+    check(address->text() == "https://bbs.afterhours.net/", "number prompt follows bookmark");
+    bool uniformSize = true;
+    for (auto block = view->document()->begin(); block.isValid(); block = block.next()) {
+        for (auto it = block.begin(); !it.atEnd(); ++it) {
+            const auto fragment = it.fragment();
+            if (fragment.isValid() && (fragment.charFormat().fontPointSize() > view->font().pointSizeF()
+                || fragment.charFormat().intProperty(QTextFormat::FontSizeAdjustment) != 0)) uniformSize = false;
+        }
+    }
+    check(uniformSize, "document headings use terminal text size");
+    check(view->document()->rootFrame()->childFrames().size() > 0, "forum list renders a table");
+    check(view->toPlainText().contains("bottleneck") && view->toPlainText().contains("23:16"), "forum list shows authors and activity");
+    check(!view->extraSelections().isEmpty() && view->extraSelections().first().cursor.selectedText().contains("[1]"), "selected link highlighted in page");
+    BrowserCore forum;
+    forum.navigate("bbs.afterhours.net");
+    const int profileIndex = linkTo(forum, "/u/side_b");
+    check(profileIndex >= 9, "fixture includes link numbers greater than nine");
+    number(widget, view, profileIndex + 1);
+    check(address->text() == "https://bbs.afterhours.net/u/side_b", "multi-digit link number opens user profile");
+    go(address, "bbs.afterhours.net/t/47");
+    check(view->toPlainText().contains("#6") && view->toPlainText().contains("slowtrain"), "thread shows complete reply sequence");
+    widget.show();
+    QCoreApplication::processEvents();
+    key(view, Qt::Key_Down);
+    key(view, Qt::Key_End);
+    const int bottom = view->verticalScrollBar()->value();
+    check(bottom > 0 && widget.findChild<QLabel *>("browserPosition")->text().endsWith("100%"), "reading position reflects scroll percentage");
+    key(view, Qt::Key_PageUp);
+    check(view->verticalScrollBar()->value() < bottom, "PageUp scrolls text browser");
+    key(view, Qt::Key_End);
+    go(address, "linnotes.me/about");
+    key(view, Qt::Key_Left);
+    check(address->text() == "https://bbs.afterhours.net/t/47" && view->verticalScrollBar()->value() == bottom
+        && widget.findChild<QLabel *>("browserPosition")->text().startsWith("2/"), "back restores reading position and selected link");
+    go(address, "linnotes.me/about");
     key(view, Qt::Key_G, "g");
     check(address->selectedText() == address->text(), "G selects address for editing");
     address->setText("linnotes.me/about");
@@ -172,16 +229,17 @@ int main(int argc, char **argv) {
     check(widget.findChild<QLabel *>("browserStatus")->text() == "Bookmark removed", "Ctrl+D toggles bookmark while editing address");
     address->setText("javascript:alert(1)");
     key(address, Qt::Key_Return);
-    check(address->text() == "javascript:alert(1)" && view->toPlainText().contains("ABOUT"), "invalid protocol leaves displayed page unchanged");
+    check(address->text() == "javascript:alert(1)" && view->toPlainText().contains("lin@linnotes.me"), "invalid protocol leaves displayed page unchanged");
     key(address, Qt::Key_Escape);
     check(address->text() == "https://linnotes.me/about" && !closed, "escape restores address without quitting");
     address->setText("www.daybreak.news/missing");
     key(address, Qt::Key_Return);
     check(view->toPlainText().contains("404"), "404 rendered in UI");
-    key(view, Qt::Key_1, "1");
+    number(widget, view, 1);
     check(address->text() == "https://www.daybreak.news/", "404 returns to website home");
     key(view, Qt::Key_F1);
-    check(widget.findChild<QLabel *>("browserStatus")->text().contains("Ctrl+D"), "help appears only on request");
+    check(address->text() == BrowserCore::helpUrl() && view->toPlainText().contains("Ctrl+D") && !star->isEnabled(), "help has an internal page separate from websites");
+    key(view, Qt::Key_Left);
     key(view, Qt::Key_Q, "q");
     check(closed, "Q quits browser");
 
@@ -196,6 +254,8 @@ int main(int argc, char **argv) {
     check(direct.findChild<QLineEdit *>("browserAddress")->text() == "https://linnotes.me/", "explicit launch URL overrides start page");
 
     TerminalCore terminal(temporary.path() + "/world");
+    if (!terminal.initializationError().isEmpty())
+        std::fprintf(stderr, "World initialization failed: %s\n", qPrintable(terminal.initializationError()));
     const auto launched = terminal.execute("browser https://www.daybreak.news/");
     check(launched.openBrowser && launched.browserUrl == "https://www.daybreak.news/", "terminal opens browser at supplied URL");
     check(terminal.execute("browser").openBrowser, "terminal opens browser without an explicit address");

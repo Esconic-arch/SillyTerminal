@@ -1,148 +1,163 @@
 {
   "bookmarks": [
-    {"label": "Daybreak", "url": "https://www.daybreak.news/"},
-    {"label": "After Hours", "url": "https://bbs.afterhours.net/"},
-    {"label": "林的备忘录", "url": "https://linnotes.me/"}
+    {
+      "label": "Daybreak",
+      "url": "https://www.daybreak.news/"
+    },
+    {
+      "label": "After Hours",
+      "url": "https://bbs.afterhours.net/"
+    },
+    {
+      "label": "林的备忘录",
+      "url": "https://linnotes.me/"
+    }
   ],
   "pages": [
     {
       "url": "https://www.daybreak.news/",
-      "title": "DAYBREAK",
-      "subtitle": "城市 / 生活 / 文化",
-      "paragraphs": [
-        "星期四，10 月 22 日",
-        "末班车之后，城市仍在运转。我们记录街区里正在发生的小事，以及生活在这里的人。"
-      ],
-      "links": [
-        {"label": "城市 · 环线末班车将延长至凌晨一点", "url": "/city/late-train"},
-        {"label": "文化 · 河岸街的旧书店重新亮灯了", "url": "/culture/bookshop"},
-        {"label": "关于 Daybreak", "url": "/about"}
-      ]
+      "title": "Daybreak — 本地新闻",
+      "document": "daybreak/index.html"
     },
     {
       "url": "https://www.daybreak.news/city/late-train",
-      "title": "环线末班车将延长至凌晨一点",
-      "subtitle": "DAYBREAK / 城市 / 10 月 22 日 09:40",
-      "paragraphs": [
-        "文 / 陈雨",
-        "从本周五起，环线将在周五、周六延长夜间运营。开往北站方向的最后一班列车将于凌晨一点从南桥站发出。",
-        "沿线商户对此表示欢迎。河岸街一家面馆的老板说，晚上十二点打烊后，他终于不必再骑车绕过大半座城。",
-        "运营方提醒，延时期间发车间隔为二十分钟，部分出口仍按原时间关闭。"
-      ],
-      "links": [
-        {"label": "Daybreak 首页", "url": "/"},
-        {"label": "相关讨论 · 末班车延时，有人一起去吃夜宵吗？", "url": "https://bbs.afterhours.net/t/47"}
-      ]
+      "title": "环线周五、周六末班车延至凌晨一点 — Daybreak",
+      "document": "daybreak/train.html"
     },
     {
       "url": "https://www.daybreak.news/culture/bookshop",
-      "title": "河岸街的旧书店重新亮灯了",
-      "subtitle": "DAYBREAK / 文化 / 10 月 21 日 16:15",
-      "paragraphs": [
-        "文 / 许言",
-        "关门八个月后，河岸街 17 号的书店在昨天下午重新营业。招牌没换，门口那只掉漆的信箱也还在。",
-        "新店主保留了原来的木书架，在靠窗的位置添了一张长桌。旧书按册出售，桌上的便签纸可以随便拿。",
-        "试营业期间，书店每天从下午两点开到晚上十点。周三休息。"
-      ],
-      "links": [{"label": "Daybreak 首页", "url": "/"}]
+      "title": "河岸街17号书店重新营业 — Daybreak",
+      "document": "daybreak/bookshop.html"
     },
     {
       "url": "https://www.daybreak.news/about",
       "title": "关于 Daybreak",
-      "subtitle": "DAYBREAK / ABOUT",
-      "paragraphs": [
-        "Daybreak 是一份关注城市生活的独立刊物。我们相信，一条街道的变化也值得被认真记录。",
-        "创刊于 2019 年。编辑部在南桥，每天早上九点亮灯。",
-        "来信：hello@daybreak.news"
-      ],
-      "links": [{"label": "Daybreak 首页", "url": "/"}]
+      "document": "daybreak/about.html"
     },
     {
       "url": "https://bbs.afterhours.net/",
-      "title": "After Hours",
-      "subtitle": "下班以后 / 最新讨论",
-      "paragraphs": [
-        "今日 18 帖 · 246 位成员",
-        "夜深了也总有人醒着。"
-      ],
-      "links": [
-        {"label": "[闲聊] 末班车延时，有人一起去吃夜宵吗？ · 3 回复", "url": "/t/47"},
-        {"label": "[音乐] 收到一盒没有封面的磁带 · 2 回复", "url": "/t/81"},
-        {"label": "关于社区", "url": "/about"}
-      ]
+      "title": "全部主题 — After Hours",
+      "document": "forum/index.html"
     },
     {
-      "url": "https://bbs.afterhours.net/t/47",
-      "title": "末班车延时，有人一起去吃夜宵吗？",
-      "subtitle": "After Hours / 闲聊 / #47",
-      "paragraphs": [
-        "moss · 10 月 22 日 19:32\n刚看到新闻，周五不用赶十二点那班了。想去南桥那家面馆，有没有人一起？",
-        "slowtrain · 19:46\n我十一点半下班，算我一个。老板的辣油记得少放。",
-        "moss · 19:51\n那就店门口见，我穿灰外套。",
-        "lin · 20:08\n吃完可以沿河走走，这两天桥下的灯修好了。"
-      ],
-      "links": [
-        {"label": "返回讨论列表", "url": "/"},
-        {"label": "相关报道", "url": "https://www.daybreak.news/city/late-train"},
-        {"label": "lin 的主页", "url": "https://linnotes.me/"}
-      ]
+      "url": "https://bbs.afterhours.net/c/chat",
+      "title": "闲聊 — After Hours",
+      "document": "forum/chat.html"
+    },
+    {
+      "url": "https://bbs.afterhours.net/c/audio",
+      "title": "音乐与器材 — After Hours",
+      "document": "forum/audio.html"
+    },
+    {
+      "url": "https://bbs.afterhours.net/c/computers",
+      "title": "电脑 — After Hours",
+      "document": "forum/computers.html"
+    },
+    {
+      "url": "https://bbs.afterhours.net/t/112",
+      "title": "笔记本一开浏览器就起飞，清灰还是重装 — After Hours",
+      "document": "forum/t-112.html"
     },
     {
       "url": "https://bbs.afterhours.net/t/81",
-      "title": "收到一盒没有封面的磁带",
-      "subtitle": "After Hours / 音乐 / #81",
-      "paragraphs": [
-        "side_b · 10 月 21 日 22:14\n在旧货摊买到的，盒子上只有一个手写的 B。第一首有很长一段雨声，然后是钢琴。有人听过吗？",
-        "needle · 22:39\n会不会是自己录的？我爸以前会把电台节目录下来。",
-        "side_b · 23:02\n也可能。最后能听见关窗的声音，挺近的。准备找个时间转录。"
-      ],
-      "links": [{"label": "返回讨论列表", "url": "/"}]
+      "title": "收到一盒没封面的磁带，最后有人关窗 — After Hours",
+      "document": "forum/t-81.html"
+    },
+    {
+      "url": "https://bbs.afterhours.net/t/47",
+      "title": "末班车延时，南桥面馆组队？ — After Hours",
+      "document": "forum/t-47.html"
+    },
+    {
+      "url": "https://bbs.afterhours.net/t/109",
+      "title": "南桥附近有不要的纸箱吗，搬家用 — After Hours",
+      "document": "forum/t-109.html"
+    },
+    {
+      "url": "https://bbs.afterhours.net/u/moss",
+      "title": "moss — After Hours",
+      "document": "forum/u-moss.html"
+    },
+    {
+      "url": "https://bbs.afterhours.net/u/slowtrain",
+      "title": "slowtrain — After Hours",
+      "document": "forum/u-slowtrain.html"
+    },
+    {
+      "url": "https://bbs.afterhours.net/u/needle",
+      "title": "needle — After Hours",
+      "document": "forum/u-needle.html"
+    },
+    {
+      "url": "https://bbs.afterhours.net/u/side_b",
+      "title": "side_b — After Hours",
+      "document": "forum/u-side_b.html"
+    },
+    {
+      "url": "https://bbs.afterhours.net/u/rust",
+      "title": "rust — After Hours",
+      "document": "forum/u-rust.html"
+    },
+    {
+      "url": "https://bbs.afterhours.net/u/bottleneck",
+      "title": "bottleneck — After Hours",
+      "document": "forum/u-bottleneck.html"
+    },
+    {
+      "url": "https://bbs.afterhours.net/u/lin",
+      "title": "lin — After Hours",
+      "document": "forum/u-lin.html"
     },
     {
       "url": "https://bbs.afterhours.net/about",
-      "title": "关于 After Hours",
-      "subtitle": "After Hours / 社区",
-      "paragraphs": [
-        "这里从 2017 年开始营业。聊音乐、吃饭、通勤，以及白天没来得及说的话。",
-        "请尊重别人的生活，不发布他人的联系方式。旧帖会一直保留。",
-        "管理员：needle · 联系：admin@afterhours.net"
-      ],
-      "links": [{"label": "返回讨论列表", "url": "/"}]
+      "title": "版规 — After Hours",
+      "document": "forum/about.html"
     },
     {
       "url": "https://linnotes.me/",
       "title": "林的备忘录",
-      "subtitle": "LIN / NOTES",
-      "paragraphs": [
-        "写些走路时想到的东西，偶尔记一张唱片。",
-        "最近更新：10 月 20 日"
-      ],
-      "links": [
-        {"label": "10.20 · 从北站走回家", "url": "/posts/nightwalk"},
-        {"label": "关于我", "url": "/about"}
-      ]
+      "document": "lin/index.html"
     },
     {
       "url": "https://linnotes.me/posts/nightwalk",
-      "title": "从北站走回家",
-      "subtitle": "林的备忘录 / 2026.10.20",
-      "paragraphs": [
-        "错过了最后一班车，索性沿河走回去。耳机没电了，才发现晚上能听到这么多声音。",
-        "便利店冰柜的嗡鸣，远处货车过桥，鞋底踩到一小片落叶。经过旧书店时，里面有人在搬书，灯亮到很晚。",
-        "回到家已经一点多。烧水，开窗，把桌上那张听了一半的唱片翻面。"
-      ],
-      "links": [{"label": "所有文章", "url": "/"}, {"label": "关于我", "url": "/about"}]
+      "title": "从北站走回家，花了52分钟 — 林的备忘录",
+      "document": "lin/nightwalk.html"
     },
     {
       "url": "https://linnotes.me/about",
-      "title": "关于我",
-      "subtitle": "林的备忘录 / ABOUT",
-      "paragraphs": [
-        "我是林。住在河边，白天工作，晚上散步。",
-        "喜欢旧书、环境音乐和不用定闹钟的早晨。这个地方用来放不适合写进工作邮件的句子。",
-        "来信：lin@linnotes.me"
-      ],
-      "links": [{"label": "回到首页", "url": "/"}, {"label": "常去的论坛", "url": "https://bbs.afterhours.net/"}]
+      "title": "关于我 — 林的备忘录",
+      "document": "lin/about.html"
+    },
+    {
+      "url": "https://www.hcmetro.com/",
+      "title": "运营服务 - HC Metro",
+      "document": "transit/index.html"
+    },
+    {
+      "url": "https://www.hcmetro.com/lines/loop",
+      "title": "环线 · 线路与时刻 - HC Metro",
+      "document": "transit/loop.html"
+    },
+    {
+      "url": "https://www.hcmetro.com/stations/nanqiao",
+      "title": "南桥站 - HC Metro",
+      "document": "transit/nanqiao.html"
+    },
+    {
+      "url": "https://www.hcmetro.com/notices",
+      "title": "运营公告 - HC Metro",
+      "document": "transit/notices.html"
+    },
+    {
+      "url": "https://www.hcmetro.com/notices/2026-10-22-late-service",
+      "title": "关于环线周五、周六延长夜间运营的公告 - HC Metro",
+      "document": "transit/late-service.html"
+    },
+    {
+      "url": "https://www.hcmetro.com/notices/2026-10-19-escalator",
+      "title": "西园站B出口上行扶梯检修安排 - HC Metro",
+      "document": "transit/escalator.html"
     }
   ]
 }

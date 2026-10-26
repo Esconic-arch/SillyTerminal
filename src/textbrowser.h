@@ -29,6 +29,12 @@ private:
     QPushButton *m_forward;
     QPushButton *m_bookmark;
     QLabel *m_status;
+    QLabel *m_title;
+    QLabel *m_position;
+    QLineEdit *m_linkNumber;
+    QWidget *m_linkPrompt;
+    QMap<QString, QPair<int, int>> m_readingPositions;
+    QString m_displayedUrl;
     int m_selected = 0;
     int m_spacing;
     std::function<void()> m_close;
@@ -40,5 +46,9 @@ private:
     void goForward();
     void focusAddress();
     void toggleBookmark();
+    void highlightLink(bool scrollToLink = false);
+    void updatePosition();
+    void updateLinkStatus();
+    void rememberPosition();
     void status(const QString &text, bool error = false);
 };

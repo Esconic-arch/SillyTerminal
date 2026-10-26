@@ -12,6 +12,9 @@
 #include <QSaveFile>
 #include <QStringConverter>
 #include <QTemporaryDir>
+#ifdef Q_OS_WIN
+#include <QThread>
+#endif
 #include <algorithm>
 
 namespace {
@@ -103,7 +106,20 @@ void TerminalCore::initialize() {
                 return;
             }
         }
-        if (!QDir().rename(staged.path(), m_worldRoot)) {
+        const auto publish = [&] {
+            return !QFileInfo::exists(m_worldRoot) && QDir().rename(staged.path(), m_worldRoot);
+        };
+        bool published = publish();
+#ifdef Q_OS_WIN
+        // Newly written files can briefly be held open by Windows services.
+        // Retry only while the destination is absent; never replace a world.
+        for (const auto delay : {25ul, 50ul, 100ul, 200ul}) {
+            if (published || QFileInfo::exists(m_worldRoot)) break;
+            QThread::msleep(delay);
+            published = publish();
+        }
+#endif
+        if (!published) {
             m_initializationError = "workspace: cannot finish initialization";
             return;
         }
