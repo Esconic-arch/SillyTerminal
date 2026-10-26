@@ -9,13 +9,14 @@
 | 网页设计与内容 | [websites.md](websites.md) |
 | 终端优化 | [terminal.md](terminal.md) |
 | 浏览器功能 | [browser.md](browser.md) |
+| 虚构网络与目标系统 | [network.md](network.md) |
 | 整体设计与整合 | [integration.md](integration.md) |
 
 给新对话一句“请读取 `docs/roles/websites.md`，作为本对话的职责说明”即可指定网页方向。其他方向替换文件名。仅要求读取本说明时，先了解可选分工，不自行认领方向或开始开发。
 
 ## 初始化时做什么
 
-1. 阅读用户指定的角色文档、本说明、根目录 `AGENTS.md`、`README.md` 和 `docs/parallel-development.md`。
+1. 阅读用户指定的角色文档、本说明、根目录 `AGENTS.md`、`README.md`、[项目方向](../project-vision.md) 和 `docs/parallel-development.md`。
 2. 有必要时，只读查看职责相关的目录和源码，以了解现有实现。当前状态以仓库为准，不依赖其他对话的完整历史。
 3. 简要确认本对话的职责、相关的已有实现和与其他方向的边界。
 4. 确认后等待用户提出具体需求。不要自行挑选功能、生成开发计划或开展改造。

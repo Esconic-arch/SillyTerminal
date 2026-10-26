@@ -2,6 +2,8 @@
 
 使用 **C++17、Qt 6 Widgets、CMake** 开发的伪终端初版。在 Windows 和 macOS 上使用同一套源码，分别编译运行。
 
+整体目标是一台持续存在、能够探索和操作预设虚构系统的“黑客电脑”。已确认目标与后续讨论方向见 [项目方向](docs/project-vision.md)。
+
 多对话开发的目录隔离、任务分工和合并流程见 [并行开发指南](docs/parallel-development.md)。
 
 新对话可直接读取 [角色说明](docs/roles/README.md) 中对应的职责文档，先了解项目和确认分工，之后再按需讨论或开发。
