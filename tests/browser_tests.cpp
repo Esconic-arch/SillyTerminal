@@ -98,7 +98,7 @@ int main(int argc, char **argv) {
             if (!visited.contains(core.currentUrl())) pending.append(core.currentUrl());
         }
     }
-    check(visited.size() == 30, "all authored pages and favorites are reachable");
+    check(visited.size() == 37, "all authored pages and favorites are reachable");
     BrowserCore transit;
     check(transit.navigate("hcmetro.com") && transit.currentPage().found
         && transit.currentUrl() == "https://www.hcmetro.com/", "transit domain opens without www or scheme");
