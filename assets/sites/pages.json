@@ -158,6 +158,41 @@
       "url": "https://www.hcmetro.com/notices/2026-10-19-escalator",
       "title": "西园站B出口上行扶梯检修安排 - HC Metro",
       "document": "transit/escalator.html"
+    },
+    {
+      "url": "https://donggang.news/",
+      "title": "东港观察 — 东港本地新闻",
+      "document": "donggang/index.html"
+    },
+    {
+      "url": "https://donggang.news/port/yard-cameras",
+      "title": "三号堆场更换24台网络摄像机，门岗登记流程不变 — 东港观察",
+      "document": "donggang/yard-cameras.html"
+    },
+    {
+      "url": "https://donggang.news/city/north-pier-works",
+      "title": "北堤渡口周末修路，步行乘船请走东侧便道 — 东港观察",
+      "document": "donggang/north-pier-works.html"
+    },
+    {
+      "url": "https://donggang.news/neighborhood/warehouse-market",
+      "title": "旧货运仓周日开集，修伞和修收音机的摊位也来了 — 东港观察",
+      "document": "donggang/warehouse-market.html"
+    },
+    {
+      "url": "https://donggang.news/about",
+      "title": "关于东港观察",
+      "document": "donggang/about.html"
+    },
+    {
+      "url": "https://mc210.mingche.net/",
+      "title": "MC-210 网络摄像机 — 明澈电子",
+      "document": "mingche/mc-210.html"
+    },
+    {
+      "url": "https://r4.yuanqiao.net/",
+      "title": "R4 千兆商用路由器 — 远桥网络",
+      "document": "yuanqiao/r4.html"
     }
   ]
 }

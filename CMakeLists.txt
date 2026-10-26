@@ -64,6 +64,13 @@ qt_add_resources(browser_core local_sites
         assets/sites/transit/notices.html
         assets/sites/transit/late-service.html
         assets/sites/transit/escalator.html
+        assets/sites/donggang/index.html
+        assets/sites/donggang/yard-cameras.html
+        assets/sites/donggang/north-pier-works.html
+        assets/sites/donggang/warehouse-market.html
+        assets/sites/donggang/about.html
+        assets/sites/mingche/mc-210.html
+        assets/sites/yuanqiao/r4.html
 )
 add_library(text_browser src/textbrowser.cpp src/textbrowser.h)
 target_link_libraries(text_browser PUBLIC browser_core Qt6::Widgets)
