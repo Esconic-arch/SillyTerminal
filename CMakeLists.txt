@@ -69,12 +69,14 @@ add_library(text_browser src/textbrowser.cpp src/textbrowser.h)
 target_link_libraries(text_browser PUBLIC browser_core Qt6::Widgets)
 target_include_directories(text_browser PUBLIC src)
 
+add_library(terminal_ui src/terminalwidget.cpp src/terminalwidget.h src/textpager.cpp src/textpager.h)
+target_link_libraries(terminal_ui PUBLIC terminal_core vim_editor text_browser Qt6::Widgets)
+target_include_directories(terminal_ui PUBLIC src)
+
 qt_add_executable(SillyTerminal
     src/main.cpp
-    src/terminalwidget.cpp
-    src/terminalwidget.h
 )
-target_link_libraries(SillyTerminal PRIVATE terminal_core vim_editor text_browser Qt6::Widgets)
+target_link_libraries(SillyTerminal PRIVATE terminal_ui)
 set_target_properties(SillyTerminal PROPERTIES
     WIN32_EXECUTABLE TRUE
     MACOSX_BUNDLE TRUE
@@ -94,6 +96,10 @@ if(BUILD_TESTING)
     add_executable(browser_tests tests/browser_tests.cpp)
     target_link_libraries(browser_tests PRIVATE text_browser terminal_core)
     add_test(NAME browser COMMAND browser_tests)
+    add_executable(terminal_interaction_tests tests/terminal_interaction_tests.cpp)
+    target_link_libraries(terminal_interaction_tests PRIVATE terminal_ui)
+    add_test(NAME terminal_interaction COMMAND terminal_interaction_tests)
+    set_tests_properties(terminal_interaction PROPERTIES TIMEOUT 20 ENVIRONMENT "QT_FORCE_STDERR_LOGGING=1")
     add_test(NAME terminal_ui COMMAND SillyTerminal --smoke-test ${CMAKE_CURRENT_BINARY_DIR}/terminal-preview.png)
     set_tests_properties(terminal_ui PROPERTIES TIMEOUT 20 ENVIRONMENT "QT_FORCE_STDERR_LOGGING=1")
 endif()

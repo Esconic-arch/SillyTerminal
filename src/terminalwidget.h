@@ -8,6 +8,9 @@ class QKeyEvent;
 class QMimeData;
 class VimEditor;
 class TextBrowser;
+class QLineEdit;
+class QLabel;
+class TextPager;
 
 class TerminalWidget : public QTextEdit {
 public:
@@ -23,16 +26,24 @@ protected:
     void insertFromMimeData(const QMimeData *source) override;
     void contextMenuEvent(QContextMenuEvent *event) override;
     void resizeEvent(QResizeEvent *event) override;
+    bool eventFilter(QObject *object, QEvent *event) override;
 
 private:
     TerminalCore m_core;
     int m_inputStart = 0;
-    QStringList m_history;
     int m_historyIndex = 0;
     QString m_draft;
+    QString m_killBuffer;
+    bool m_lastWasKill = false;
+    QLineEdit *m_historySearch = nullptr;
+    QLabel *m_historySearchLabel = nullptr;
+    QString m_searchDraft;
+    int m_searchDraftCursor = 0;
+    int m_searchIndex = -1;
     int m_lineSpacing = 115;
     VimEditor *m_vim = nullptr;
     TextBrowser *m_browser = nullptr;
+    TextPager *m_pager = nullptr;
 
     QString currentInput() const;
     void setInput(const QString &text);
@@ -42,8 +53,14 @@ private:
     void submit();
     void clearScreen();
     void completeInput();
+    void beginHistorySearch();
+    void layoutHistorySearch();
+    void searchHistory(bool next);
+    void finishHistorySearch(bool cancel);
+    void killInput(int start, int end, bool backward);
     void applyAppearance(const QFont &font, int lineSpacing, bool save);
     void openEditor(const QString &path, const QString &content);
     void openVim(const QString &path, const QString &content);
     void openBrowser(const QString &address);
+    void openPager(const QString &title, const QString &content);
 };

@@ -81,8 +81,71 @@ int main(int argc, char **argv) {
     check(core.execute("cat 'journals/a b.txt'").text == "quoted >> text\n", "quoted text saved");
     check(core.execute("echo hello >").error, "missing redirection destination");
     check(core.execute("echo a > x > y").error, "multiple redirections rejected");
-    check(core.execute("cat notes.txt > journals/unexpected.txt").error, "unsupported redirection rejected");
-    check(!QFileInfo::exists(world + "/home/guest/journals/unexpected.txt"), "failed command does not create destination");
+    check(!core.execute("cat notes.txt > journals/saved.txt").error, "cat supports output redirection");
+    check(core.execute("cat journals/saved.txt").text == core.execute("cat notes.txt").text, "cat redirection preserves exact bytes");
+    check(!core.execute("pwd>journals/path.txt").error, "general output redirection without spaces");
+    check(core.execute("cat journals/path.txt").text == "/home/guest\n", "line-oriented commands end stream output with newline");
+    check(!core.execute("ls documents > journals/list.txt").error, "ls redirects to a file");
+    check(core.execute("cat journals/list.txt").text == "quick start.txt\nwelcome.txt\n", "piped and redirected ls uses one name per line");
+    core.saveFile("journals/search.txt", QString::fromUtf8("warning one\n普通信息\nWARNING two\nwarning.three"));
+    check(core.execute("cat journals/search.txt|grep -Fin warning").output
+        == "1:warning one\n3:WARNING two\n4:warning.three\n", "pipe accepts combined grep flags and preserves line numbers");
+    check(core.execute("grep -F . journals/search.txt").output == "warning.three\n", "grep -F treats regex metacharacters literally");
+    check(core.execute("cat journals/search.txt | grep -F warning | grep -Fn three").output == "2:warning.three\n", "multiple pipeline stages filter successive input");
+    check(!core.execute("grep -Fn warning < journals/search.txt > journals/matches.txt").error, "input and output redirection compose");
+    check(core.execute("cat journals/matches.txt").text == "1:warning one\n4:warning.three\n", "grep redirection saves exact matching lines");
+    const auto absentMatch = core.execute("echo value | grep -F absent");
+    check(absentMatch.exitCode == 1 && !absentMatch.error && absentMatch.diagnostics.isEmpty() && absentMatch.output.isEmpty(), "grep no match is status 1 with no error message");
+    const auto readError = core.execute("cat /absent | grep -F absent > journals/errors.txt");
+    check(readError.error && readError.diagnostics.contains("no such file") && readError.output.isEmpty(), "pipeline retains earlier diagnostics");
+    check(core.execute("cat journals/errors.txt").text.isEmpty(), "stderr is not piped or redirected into stdout");
+    core.execute("echo original > journals/truncate.txt");
+    check(core.execute("cat /absent > journals/truncate.txt").error
+        && core.execute("cat journals/truncate.txt").text.isEmpty(), "shell opens and truncates output before command failure");
+    core.saveFile("journals/raw.txt", "without newline");
+    core.execute("cat journals/raw.txt >> journals/raw-copy.txt");
+    core.execute("echo suffix >> journals/raw-copy.txt");
+    check(core.execute("cat journals/raw-copy.txt").text == "without newlinesuffix\n", "append never invents a separator newline");
+    core.execute("cat journals/raw-copy.txt > journals/raw-copy.txt");
+    check(core.execute("cat journals/raw-copy.txt").text.isEmpty(), "same input/output file is truncated before reading");
+    check(core.execute("echo 'a|b<c>d' | grep -F '|'").output == "a|b<c>d\n", "quoted shell operators survive pipelines");
+    check(core.execute("echo a\\|b\\>c").text == "a|b>c", "escaped operators remain text");
+    check(!core.execute("echo '123'>journals/numeric.txt").error
+        && core.execute("cat journals/numeric.txt").text == "123\n", "quoted numeric arguments are not mistaken for file descriptors");
+    check(core.execute("echo hi 2>journals/stderr.txt").error
+        && !QFileInfo::exists(world + "/home/guest/journals/stderr.txt"), "unsupported descriptor redirection is explicit and has no side effects");
+    check(core.execute("echo once | cat - -").output == "once\n", "stdin is consumed only once across repeated cat operands");
+    core.saveFile("journals/bom.txt", QString(QChar(0xfeff)) + "one\r\ntwo\r\n");
+    core.execute("cat journals/bom.txt > journals/bom-copy.txt");
+    check(core.execute("cat journals/bom-copy.txt").text == QString(QChar(0xfeff)) + "one\r\ntwo\r\n", "text redirection preserves UTF-8 BOM and CRLF");
+    const auto partialRead = core.execute("cat journals/raw.txt /absent | grep -F without");
+    check(partialRead.output == "without newline\n" && partialRead.diagnostics.contains("no such file")
+        && partialRead.exitCode == 0, "partial stdout continues through pipe while diagnostics and final status stay separate");
+    for (const QString &syntax : {"| pwd", "pwd |", "pwd || whoami", "echo x && pwd", "pwd >", "pwd > > x", "echo x; pwd"})
+        check(core.execute(syntax).error, "invalid or unsupported shell syntax is rejected");
+    check(core.execute("cd / | cat").error && core.currentPath() == "/home/guest", "pipeline cannot mutate parent directory");
+    check(core.execute("browser > journals/browser.txt").error && !QFileInfo::exists(world + "/home/guest/journals/browser.txt"), "interactive redirection is rejected before opening target");
+    const auto page = core.execute("cat journals/search.txt | less");
+    check(page.openPager && page.output.startsWith("warning one") && page.pagerTitle == "(standard input)", "less pages piped input");
+    check(!core.execute("less journals/search.txt > journals/paged.txt").openPager
+        && core.execute("cat journals/paged.txt").text == core.execute("cat journals/search.txt").text, "redirected less emits text without opening a pager");
+    const auto recursive = core.execute(QString::fromUtf8("grep -rFn 普通信息 journals"));
+    check(recursive.output.contains(QString::fromUtf8("journals/search.txt:2:普通信息")), "recursive grep searches UTF-8 content with filename and line number");
+    check(core.execute("grep -F x /absent").exitCode == 2, "grep file errors have status 2");
+    check(core.execute("grep warning journals/search.txt").error, "unsupported regex mode has explicit feedback");
+    check(core.execute("cat < /absent > journals/no-create.txt").error
+        && !QFileInfo::exists(world + "/home/guest/journals/no-create.txt"), "failed earlier input redirection prevents later output creation");
+    check(core.complete("cat \"documents/quick").replacement == "cat \"documents/quick start.txt\" ", "open double quote completes and closes");
+    check(!core.execute(core.complete("cat 'documents/quick'").replacement).error, "closed single quoted completion executes");
+    check(core.complete("cat documents/quick\\ s").replacement == "cat documents/quick\\ start.txt ", "escaped path can be completed repeatedly");
+    const auto middle = core.complete("cat documents/quic > journals/out.txt", 18);
+    check(middle.replacement == "cat documents/quick\\ start.txt > journals/out.txt"
+        && middle.cursor == 30, "completion replaces token under cursor and preserves trailing arguments");
+    check(core.complete("echo hello|gre").replacement == "echo hello|grep ", "command completes after a pipe");
+    check(core.complete("echo hi > journals/sear").replacement == "echo hi > journals/search.txt ", "completion recognizes redirection destination");
+    core.saveFile("documents/it's here.txt", "quoted name");
+    const auto apostrophe = core.complete("cat 'documents/it");
+    check(core.execute(apostrophe.replacement).text == "quoted name", "completion safely quotes apostrophes inside single quoted paths");
     const auto opened = core.execute("edit journals/new.txt");
     check(!opened.error && opened.editPath == "/home/guest/journals/new.txt", "editor opens new file");
     check(!QFileInfo::exists(world + opened.editPath), "opening editor does not create a file");
@@ -146,6 +209,8 @@ int main(int argc, char **argv) {
         check(core.execute("cat outside-link.lnk").error, "read through symlink rejected");
         check(core.execute("echo changed > outside-link.lnk").error, "write through symlink rejected");
         check(core.execute("rm outside-link.lnk").error, "delete through symlink rejected");
+        check(core.execute("echo changed | cat > outside-link.lnk").error, "pipeline output cannot follow a link outside the world");
+        check(!core.execute("grep -rF 'outside remains unchanged' .").output.contains("outside remains unchanged"), "recursive grep skips links outside the world");
         check(outside.open(QIODevice::ReadOnly) && outside.readAll() == "outside remains unchanged", "external sentinel unchanged");
         outside.close();
         QFile::remove(link);
@@ -164,6 +229,31 @@ int main(int argc, char **argv) {
     check(!restored.execute("rm -r /home").error, "delete home after leaving it");
     TerminalCore withoutHome(world);
     check(withoutHome.currentPath() == "/" && withoutHome.execute("cd ~").error, "missing home stays deleted after reload");
+    {
+        const QString historyWorld = temporary.path() + "/history-runtime/world";
+        TerminalCore history(historyWorld);
+        history.execute("echo remembered");
+        history.execute("echo remembered");
+        history.execute("   ");
+        check(history.history() == QStringList{"echo remembered"}, "history ignores empty lines and consecutive duplicates");
+        TerminalCore reopened(historyWorld);
+        check(reopened.history() == history.history(), "history persists independently from current directory");
+        check(reopened.execute("history 1").output.contains("history 1"), "history includes current command and accepts a count");
+        check(reopened.execute("history -c").output.isEmpty() && reopened.history().isEmpty(), "history can be cleared explicitly");
+        for (int i = 0; i < 1003; ++i) reopened.execute("echo " + QString::number(i));
+        TerminalCore bounded(historyWorld);
+        check(bounded.history().size() == 1000 && bounded.history().first() == "echo 3"
+            && bounded.history().last() == "echo 1002", "history retains the most recent 1000 commands on disk");
+        QFile historyFile(temporary.path() + "/history-runtime/history.json");
+        check(historyFile.open(QIODevice::WriteOnly | QIODevice::Truncate), "open corrupt history fixture");
+        historyFile.write("not json"); historyFile.close();
+        TerminalCore damaged(historyWorld);
+        check(!damaged.historyWarning().isEmpty() && !damaged.execute("echo still usable").error, "corrupt history does not prevent terminal use");
+        check(historyFile.open(QIODevice::ReadOnly) && historyFile.readAll() == "not json", "corrupt history is preserved until explicit reset");
+        historyFile.close();
+        damaged.execute("history -c");
+        check(damaged.historyWarning().isEmpty() && damaged.history().isEmpty(), "explicit clear repairs history storage");
+    }
     std::fprintf(stderr, "%d checks, %d failures\n", checks, failures);
     return failures ? 1 : 0;
 }
