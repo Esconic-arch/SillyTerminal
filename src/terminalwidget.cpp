@@ -1,6 +1,7 @@
 #include "terminalwidget.h"
 #include "vimeditor.h"
 #include "textbrowser.h"
+#include "textpager.h"
 
 #include <QApplication>
 #include <QClipboard>
@@ -79,6 +80,20 @@ TerminalWidget::TerminalWidget(QWidget *parent, const QString &worldRoot)
     write("SillyTerminal 0.1.0\n", foreground);
     write("Type help for commands, or cat notes.txt to begin.\n\n", muted);
     if (!m_core.initializationError().isEmpty()) write(m_core.initializationError() + '\n', errorColor);
+    if (!m_core.historyWarning().isEmpty()) write(m_core.historyWarning() + '\n', errorColor);
+    m_historyIndex = m_core.history().size();
+    m_historySearch = new QLineEdit(this);
+    m_historySearch->setObjectName("historySearch");
+    m_historySearch->setPlaceholderText("reverse-i-search: type to search command history");
+    m_historySearch->setToolTip("Ctrl+R: older match | Esc: edit match | Enter: execute | Ctrl+G: cancel");
+    m_historySearch->setFont(font());
+    m_historySearch->installEventFilter(this);
+    m_historySearch->hide();
+    m_historySearchLabel = new QLabel("reverse-i-search:", this);
+    m_historySearchLabel->setFont(font());
+    m_historySearchLabel->setStyleSheet("QLabel { color: #92939f; }");
+    m_historySearchLabel->hide();
+    connect(m_historySearch, &QLineEdit::textEdited, this, [this] { searchHistory(false); });
     showPrompt();
 }
 
@@ -132,19 +147,19 @@ void TerminalWidget::ensureEditableCursor() {
 
 void TerminalWidget::submit() {
     const QString line = currentInput();
-    if (!line.trimmed().isEmpty() && (m_history.isEmpty() || m_history.last() != line))
-        m_history.append(line);
-    m_historyIndex = m_history.size();
     m_draft.clear();
     write("\n", foreground);
     const CommandResult result = m_core.execute(line);
+    m_historyIndex = m_core.history().size();
     if (result.clear) { clearScreen(); return; }
     if (result.openBrowser) openBrowser(result.browserUrl);
     if (!result.editPath.isEmpty()) {
         if (result.useVim) openVim(result.editPath, result.editContent);
         else openEditor(result.editPath, result.editContent);
     }
-    if (!result.text.isEmpty()) write(result.text + '\n', result.error ? errorColor : foreground);
+    if (result.openPager) openPager(result.pagerTitle, result.output);
+    else if (!result.output.isEmpty()) write(result.output, foreground);
+    if (!result.diagnostics.isEmpty()) write(result.diagnostics, errorColor);
     showPrompt();
 }
 
@@ -160,17 +175,145 @@ void TerminalWidget::clearScreen() {
 }
 
 void TerminalWidget::completeInput() {
-    const auto result = m_core.complete(currentInput());
-    if (result.replacement != currentInput()) setInput(result.replacement);
+    ensureEditableCursor();
+    const int position = textCursor().position() - m_inputStart;
+    const auto result = m_core.complete(currentInput(), position);
+    if (result.replacement != currentInput()) {
+        setInput(result.replacement);
+        auto cursor = textCursor();
+        cursor.setPosition(m_inputStart + result.cursor);
+        setTextCursor(cursor);
+    }
     else if (result.candidates.size() > 1) {
         const QString input = currentInput();
         write("\n" + result.candidates.join("    ") + "\n", muted);
         showPrompt();
         setInput(input);
+        auto cursor = textCursor();
+        cursor.setPosition(m_inputStart + position);
+        setTextCursor(cursor);
     }
 }
 
+void TerminalWidget::layoutHistorySearch() {
+    const int labelWidth = qMin(width() / 2, fontMetrics().horizontalAdvance("reverse-i-search:") + 12);
+    m_historySearchLabel->setGeometry(16, height() - 42, labelWidth, 30);
+    m_historySearch->setGeometry(16 + labelWidth, height() - 42, qMax(40, width() - labelWidth - 32), 30);
+}
+
+void TerminalWidget::beginHistorySearch() {
+    ensureEditableCursor();
+    m_searchDraft = currentInput();
+    m_searchDraftCursor = textCursor().position() - m_inputStart;
+    m_searchIndex = m_core.history().size();
+    m_historySearch->clear();
+    layoutHistorySearch();
+    setViewportMargins(0, 0, 0, 42);
+    m_historySearchLabel->show();
+    m_historySearch->show();
+    m_historySearch->raise();
+    m_historySearch->setFocus();
+    searchHistory(false);
+}
+
+void TerminalWidget::searchHistory(bool next) {
+    const auto &history = m_core.history();
+    const int start = next ? m_searchIndex - 1 : int(history.size()) - 1;
+    for (int i = start; i >= 0; --i) {
+        if (!history.at(i).contains(m_historySearch->text())) continue;
+        m_searchIndex = i;
+        setInput(history.at(i));
+        m_historySearch->setStyleSheet("QLineEdit { background: #25262a; color: #dedee5; border: 1px solid #92939f; padding: 4px; }");
+        return;
+    }
+    m_historySearch->setStyleSheet("QLineEdit { background: #25262a; color: #f0a6a9; border: 1px solid #f0a6a9; padding: 4px; }");
+}
+
+void TerminalWidget::finishHistorySearch(bool cancel) {
+    m_historySearch->hide();
+    m_historySearchLabel->hide();
+    setViewportMargins(0, 0, 0, 0);
+    if (cancel) {
+        setInput(m_searchDraft);
+        auto cursor = textCursor();
+        cursor.setPosition(m_inputStart + m_searchDraftCursor);
+        setTextCursor(cursor);
+    }
+    m_historyIndex = cancel ? m_core.history().size() : m_searchIndex;
+    m_draft = m_searchDraft;
+    setFocus();
+}
+
+bool TerminalWidget::eventFilter(QObject *object, QEvent *event) {
+    if (object == m_historySearch && event->type() == QEvent::KeyPress) {
+        auto *key = static_cast<QKeyEvent *>(event);
+        const bool control = key->modifiers().testFlag(Qt::ControlModifier);
+        if (control && key->key() == Qt::Key_R) { searchHistory(true); return true; }
+        if (control && (key->key() == Qt::Key_G || key->key() == Qt::Key_C)) {
+            finishHistorySearch(true); return true;
+        }
+        if (key->key() == Qt::Key_Escape) { finishHistorySearch(false); return true; }
+        if (key->key() == Qt::Key_Return || key->key() == Qt::Key_Enter) {
+            finishHistorySearch(false); submit(); return true;
+        }
+        if (key->key() == Qt::Key_Left || key->key() == Qt::Key_Right
+            || key->key() == Qt::Key_Home || key->key() == Qt::Key_End
+            || (control && (key->key() == Qt::Key_A || key->key() == Qt::Key_E))) {
+            finishHistorySearch(false); keyPressEvent(key); return true;
+        }
+    }
+    return QTextEdit::eventFilter(object, event);
+}
+
+void TerminalWidget::killInput(int start, int end, bool backward) {
+    if (start == end) return;
+    auto cursor = textCursor();
+    cursor.setPosition(start);
+    cursor.setPosition(end, QTextCursor::KeepAnchor);
+    const QString killed = cursor.selectedText();
+    if (m_lastWasKill) m_killBuffer = backward ? killed + m_killBuffer : m_killBuffer + killed;
+    else m_killBuffer = killed;
+    cursor.removeSelectedText();
+    setTextCursor(cursor);
+    m_lastWasKill = true;
+}
+
 void TerminalWidget::keyPressEvent(QKeyEvent *event) {
+    const bool control = event->modifiers().testFlag(Qt::ControlModifier);
+    const bool meta = event->modifiers().testFlag(Qt::MetaModifier);
+    const bool alt = event->modifiers().testFlag(Qt::AltModifier);
+    const bool kill = control && (event->key() == Qt::Key_U || event->key() == Qt::Key_K || event->key() == Qt::Key_W);
+    if (!kill) m_lastWasKill = false;
+    if (control && event->key() == Qt::Key_R) { beginHistorySearch(); return; }
+    if (kill) {
+        ensureEditableCursor();
+        const auto cursor = textCursor();
+        const int position = cursor.position();
+        if (cursor.hasSelection()) killInput(cursor.selectionStart(), cursor.selectionEnd(), false);
+        else if (event->key() == Qt::Key_K) killInput(position, document()->characterCount() - 1, false);
+        else if (event->key() == Qt::Key_U) killInput(m_inputStart, position, true);
+        else {
+            const QString input = currentInput();
+            int start = position - m_inputStart;
+            while (start > 0 && input.at(start - 1).isSpace()) --start;
+            while (start > 0 && !input.at(start - 1).isSpace()) --start;
+            killInput(m_inputStart + start, position, true);
+        }
+        return;
+    }
+    if (control && event->key() == Qt::Key_Y) { ensureEditableCursor(); insertPlainText(m_killBuffer); return; }
+    if ((control && (event->key() == Qt::Key_A || event->key() == Qt::Key_E))
+        || (alt && (event->key() == Qt::Key_B || event->key() == Qt::Key_F))) {
+        ensureEditableCursor();
+        auto cursor = textCursor();
+        const auto mode = event->modifiers().testFlag(Qt::ShiftModifier) ? QTextCursor::KeepAnchor : QTextCursor::MoveAnchor;
+        if (control) cursor.setPosition(event->key() == Qt::Key_A ? m_inputStart : document()->characterCount() - 1, mode);
+        else {
+            cursor.movePosition(event->key() == Qt::Key_B ? QTextCursor::PreviousWord : QTextCursor::NextWord, mode);
+            if (cursor.position() < m_inputStart) cursor.setPosition(m_inputStart, mode);
+        }
+        setTextCursor(cursor); return;
+    }
     const bool commandModifier = event->modifiers().testFlag(Qt::ControlModifier)
         || event->modifiers().testFlag(Qt::MetaModifier);
     if (commandModifier && event->key() == Qt::Key_Comma) { showAppearanceSettings(); return; }
@@ -181,7 +324,7 @@ void TerminalWidget::keyPressEvent(QKeyEvent *event) {
     if (commandModifier && event->key() == Qt::Key_C) {
         setInput(currentInput() + "^C");
         write("\n\n", muted);
-        m_historyIndex = m_history.size();
+        m_historyIndex = m_core.history().size();
         m_draft.clear();
         showPrompt();
         return;
@@ -196,19 +339,21 @@ void TerminalWidget::keyPressEvent(QKeyEvent *event) {
         return;
     }
     if (commandModifier && event->key() == Qt::Key_L) { clearScreen(); return; }
-    if (commandModifier && event->key() == Qt::Key_K) { clearScreen(); return; }
+    if (meta && event->key() == Qt::Key_K) { clearScreen(); return; }
     if (event->key() == Qt::Key_F1) { runCommand("help"); return; }
     if (event->key() == Qt::Key_Return || event->key() == Qt::Key_Enter) { submit(); return; }
     if (event->key() == Qt::Key_Tab) { completeInput(); return; }
     if (event->key() == Qt::Key_Up) {
-        if (m_historyIndex == m_history.size()) m_draft = currentInput();
-        if (m_historyIndex > 0) setInput(m_history.at(--m_historyIndex));
+        const auto &history = m_core.history();
+        if (m_historyIndex == history.size()) m_draft = currentInput();
+        if (m_historyIndex > 0) setInput(history.at(--m_historyIndex));
         return;
     }
     if (event->key() == Qt::Key_Down) {
-        if (m_historyIndex < m_history.size()) {
+        const auto &history = m_core.history();
+        if (m_historyIndex < history.size()) {
             ++m_historyIndex;
-            setInput(m_historyIndex == m_history.size() ? m_draft : m_history.at(m_historyIndex));
+            setInput(m_historyIndex == history.size() ? m_draft : history.at(m_historyIndex));
         }
         return;
     }
@@ -255,12 +400,14 @@ void TerminalWidget::keyPressEvent(QKeyEvent *event) {
 }
 
 void TerminalWidget::inputMethodEvent(QInputMethodEvent *event) {
+    m_lastWasKill = false;
     ensureEditableCursor();
     QTextEdit::inputMethodEvent(event);
 }
 
 void TerminalWidget::insertFromMimeData(const QMimeData *source) {
     if (!source || !source->hasText()) return;
+    m_lastWasKill = false;
     ensureEditableCursor();
     QString text = source->text();
     text.replace("\r\n", " ").replace('\n', ' ').replace('\r', ' ');
@@ -284,6 +431,9 @@ void TerminalWidget::applyAppearance(const QFont &chosenFont, int lineSpacing, b
     ensureCursorVisible();
     if (m_vim) m_vim->setAppearance(chosenFont, m_lineSpacing);
     if (m_browser) m_browser->setAppearance(chosenFont, m_lineSpacing);
+    if (m_pager) m_pager->setAppearance(chosenFont, m_lineSpacing);
+    if (m_historySearch) m_historySearch->setFont(chosenFont);
+    if (m_historySearchLabel) { m_historySearchLabel->setFont(chosenFont); layoutHistorySearch(); }
     if (save) {
         QSettings settings;
         settings.setValue("appearance/fontFamily", chosenFont.family());
@@ -297,6 +447,21 @@ void TerminalWidget::resizeEvent(QResizeEvent *event) {
     QTextEdit::resizeEvent(event);
     if (m_vim) m_vim->setGeometry(rect());
     if (m_browser) m_browser->setGeometry(rect());
+    if (m_pager) m_pager->setGeometry(rect());
+    if (m_historySearchLabel) layoutHistorySearch();
+}
+
+void TerminalWidget::openPager(const QString &title, const QString &content) {
+    QEventLoop loop;
+    m_pager = new TextPager(title, content, font(), m_lineSpacing, [&loop] { loop.quit(); }, this);
+    m_pager->setGeometry(rect());
+    m_pager->show();
+    m_pager->raise();
+    m_pager->focusPage();
+    loop.exec();
+    delete m_pager;
+    m_pager = nullptr;
+    setFocus();
 }
 
 void TerminalWidget::openBrowser(const QString &address) {

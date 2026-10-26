@@ -7,6 +7,7 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QJsonDocument>
+#include <QJsonArray>
 #include <QJsonObject>
 #include <QRegularExpression>
 #include <QSaveFile>
@@ -16,11 +17,17 @@
 #include <QThread>
 #endif
 #include <algorithm>
+#include <functional>
 
 namespace {
-const QStringList commands = {"browser", "cat", "cd", "clear", "cp", "echo", "edit", "help", "ls",
+const QStringList commands = {"browser", "cat", "cd", "clear", "cp", "echo", "edit", "grep", "help", "history", "less", "ls",
     "mkdir", "mv", "pwd", "rm", "touch", "vim", "whoami"};
-CommandResult fail(const QString &message) { return {message, true, false}; }
+constexpr int historyLimit = 1000;
+CommandResult fail(const QString &message, int status = 1) {
+    CommandResult result{message, true, false};
+    result.exitCode = status;
+    return result;
+}
 #ifdef Q_OS_WIN
 constexpr auto pathCase = Qt::CaseInsensitive;
 #else
@@ -66,6 +73,56 @@ TerminalCore::TerminalCore(const QString &worldRoot) {
     m_worldRoot = QDir::cleanPath(QFileInfo(worldRoot.isEmpty() ? defaultWorldRoot() : worldRoot).absoluteFilePath());
     m_statePath = QFileInfo(m_worldRoot).dir().filePath("session.json");
     initialize();
+    if (m_initializationError.isEmpty()) loadHistory();
+}
+
+void TerminalCore::loadHistory() {
+    const QString path = QFileInfo(m_worldRoot).dir().filePath("history.json");
+    QFile file(path);
+    if (!QFileInfo::exists(path) && !isLink(QFileInfo(path))) return;
+    if (isLink(QFileInfo(path)) || !file.open(QIODevice::ReadOnly) || file.size() > 4 * 1024 * 1024) {
+        m_historyWarning = "history: cannot read history.json; history will not be saved this session";
+        m_historyWritable = false;
+        return;
+    }
+    QJsonParseError error;
+    const auto document = QJsonDocument::fromJson(file.readAll(), &error);
+    if (file.error() != QFileDevice::NoError || error.error != QJsonParseError::NoError || !document.isArray()) {
+        m_historyWarning = "history: invalid history.json; existing file preserved (history -c resets it)";
+        m_historyWritable = false;
+        return;
+    }
+    const auto entries = document.array();
+    for (const auto &entry : entries) {
+        const QString line = entry.toString();
+        if (!line.trimmed().isEmpty() && line.size() <= 16384 && !line.contains('\n') && !line.contains('\r'))
+            m_history.append(line);
+    }
+    if (m_history.size() > historyLimit) m_history = m_history.last(historyLimit);
+}
+
+void TerminalCore::saveHistory() {
+    if (!m_historyWritable) return;
+    QString error;
+    if (physicalPath("/", error).isEmpty()) {
+        m_historyWarning = "history: cannot save because the world directory has changed";
+        return;
+    }
+    const QString path = QFileInfo(m_worldRoot).dir().filePath("history.json");
+    QSaveFile file(path);
+    if (isLink(QFileInfo(path)) || !file.open(QIODevice::WriteOnly)) {
+        m_historyWarning = "history: cannot save history.json";
+        return;
+    }
+    QJsonArray entries;
+    for (const auto &line : m_history) entries.append(line);
+    QByteArray data = QJsonDocument(entries).toJson(QJsonDocument::Compact);
+    while (data.size() > 4 * 1024 * 1024 && !m_history.isEmpty()) {
+        m_history.removeFirst(); entries.removeAt(0);
+        data = QJsonDocument(entries).toJson(QJsonDocument::Compact);
+    }
+    if (file.write(data) != data.size() || !file.commit()) m_historyWarning = "history: cannot save history.json";
+    else m_historyWarning.clear();
 }
 
 void TerminalCore::initialize() {
@@ -234,33 +291,59 @@ QStringList TerminalCore::children(const QString &directory, bool hidden) const 
     return result;
 }
 
-QList<TerminalCore::Token> TerminalCore::tokenize(const QString &line, QString &error) {
+QList<TerminalCore::Token> TerminalCore::tokenize(const QString &line, QString &error, bool partial) {
     QList<Token> tokens;
     QString token;
     QChar quote;
     bool started = false;
     bool escaped = false;
+    int start = 0;
+    int end = 0;
     const auto flush = [&] {
-        if (started) { tokens.append({token, false}); token.clear(); started = false; }
+        if (started) { tokens.append({token, false, start, end}); token.clear(); started = false; }
     };
     for (int i = 0; i < line.size(); ++i) {
         const QChar ch = line.at(i);
+        if (!started) start = i;
+        end = i + 1;
         if (escaped) { token += ch; started = true; escaped = false; continue; }
-        if (ch == '\\' && quote != '\'') { escaped = true; started = true; continue; }
+        if (ch == '\\' && quote != '\'') {
+            // Within double quotes, only shell-special characters are escaped.
+            if (quote == '"' && i + 1 < line.size() && !QStringLiteral("$`\"\\").contains(line.at(i + 1)))
+                token += ch;
+            else escaped = true;
+            started = true;
+            continue;
+        }
         if (!quote.isNull()) {
             if (ch == quote) quote = QChar();
             else token += ch;
         } else if (ch == '\'' || ch == '"') { quote = ch; started = true; }
-        else if (ch.isSpace()) flush();
-        else if (ch == '>') {
+        else if (ch.isSpace()) { end = i; flush(); }
+        else if (QStringLiteral("|><;&()`").contains(ch)) {
+            if (!partial && QStringLiteral(";&()`").contains(ch)) {
+                error = "parse: unsupported shell operator " + QString(ch); return {};
+            }
+            const QString raw = line.mid(start, i - start);
+            const bool descriptor = started && !raw.isEmpty()
+                && std::all_of(raw.begin(), raw.end(), [](QChar c) { return c >= '0' && c <= '9'; });
+            if (!partial && (ch == '>' || ch == '<') && descriptor) {
+                error = "parse: file descriptor redirection is not supported"; return {};
+            }
+            end = i;
             flush();
-            QString op = ">";
-            if (i + 1 < line.size() && line.at(i + 1) == '>') { op = ">>"; ++i; }
-            tokens.append({op, true});
+            const int opStart = i;
+            QString op(ch);
+            if (i + 1 < line.size() && line.at(i + 1) == ch) {
+                op += ch; ++i;
+                if (!partial && op != ">>") { error = "parse: unsupported shell operator " + op; return {}; }
+            }
+            tokens.append({op, true, opStart, i + 1});
         } else { token += ch; started = true; }
     }
-    if (escaped) { error = "parse: incomplete escape at end of input"; return {}; }
-    if (!quote.isNull()) { error = "parse: unclosed quote"; return {}; }
+    if (escaped && !partial) { error = "parse: incomplete escape at end of input"; return {}; }
+    if (!quote.isNull() && !partial) { error = "parse: unclosed quote"; return {}; }
+    end = line.size();
     flush();
     return tokens;
 }
@@ -284,7 +367,7 @@ CommandResult TerminalCore::readFile(const QString &path) const {
     const QByteArray data = file.readAll();
     if (file.error() != QFileDevice::NoError) return fail(path + ": " + file.errorString());
     if (data.contains('\0')) return fail(path + ": not a text file");
-    QStringDecoder utf8(QStringDecoder::Utf8);
+    QStringDecoder utf8(QStringDecoder::Utf8, QStringConverter::Flag::ConvertInitialBom);
     const QString text = utf8(data);
     if (utf8.hasError()) return fail(path + ": file is not UTF-8 text");
     return {text};
@@ -365,29 +448,159 @@ CommandResult TerminalCore::transfer(const QString &command, const QStringList &
 }
 
 CommandResult TerminalCore::execute(const QString &line) {
-    if (!m_initializationError.isEmpty()) return fail(m_initializationError);
+    if (!m_initializationError.isEmpty()) {
+        auto result = fail(m_initializationError);
+        result.diagnostics = result.text + '\n';
+        return result;
+    }
+    if (!line.trimmed().isEmpty() && line.size() <= 16384
+        && !line.contains('\n') && !line.contains('\r')
+        && (m_history.isEmpty() || m_history.last() != line)) {
+        m_history.append(line);
+        if (m_history.size() > historyLimit) m_history.removeFirst();
+        saveHistory();
+    }
+    auto result = executePipeline(line);
+    // Errors returned before a command runs still have a diagnostic stream.
+    if (result.error && result.diagnostics.isEmpty()) result.diagnostics = result.text + '\n';
+    if (!m_historyWarning.isEmpty()) result.diagnostics += m_historyWarning + '\n';
+    return result;
+}
+
+CommandResult TerminalCore::executePipeline(const QString &line) {
     QString parseError;
-    auto tokens = tokenize(line, parseError);
+    const auto tokens = tokenize(line, parseError);
     if (!parseError.isEmpty()) return fail(parseError);
     if (tokens.isEmpty()) return {};
-    const auto first = tokens.takeFirst();
-    if (first.redirection) return fail("parse: expected a command before redirection");
-    const QString command = first.text;
-    if (!commands.contains(command)) return fail(command + ": command not found. Type 'help' for commands.");
-    int redirect = -1;
-    QStringList args;
+    struct Redirection { QString op; QString path; };
+    struct Stage { QStringList words; QList<Redirection> redirects; };
+    QList<Stage> stages(1);
     for (int i = 0; i < tokens.size(); ++i) {
-        if (tokens.at(i).redirection) {
-            if (redirect != -1) return fail("parse: only one output redirection is supported");
-            redirect = i;
+        const auto &token = tokens.at(i);
+        if (!token.control) stages.last().words.append(token.text);
+        else if (token.text == "|") {
+            if (stages.last().words.isEmpty()) return fail("parse: expected a command before '|'");
+            stages.append(Stage{});
+        } else {
+            if (i + 1 >= tokens.size() || tokens.at(i + 1).control)
+                return fail("parse: expected a filename after " + token.text);
+            for (const auto &existing : stages.last().redirects)
+                if ((existing.op == "<") == (token.text == "<"))
+                    return fail("parse: only one input and one output redirection per command are supported");
+            stages.last().redirects.append({token.text, tokens.at(++i).text});
         }
-        args.append(tokens.at(i).text);
     }
-    if (redirect >= 0) {
-        if (command != "echo") return fail("redirection is currently supported for echo only");
-        if (redirect != tokens.size() - 2 || tokens.last().redirection)
-            return fail("usage: echo [text] > <file> or echo [text] >> <file>");
-        return writeFile(resolve(args.last()), args.mid(0, redirect).join(' ') + '\n', tokens.at(redirect).text == ">>");
+    if (stages.last().words.isEmpty()) return fail("parse: expected a command");
+    const QStringList textCommands = {"cat", "echo", "grep", "help", "history", "less", "ls", "pwd", "whoami"};
+    for (int i = 0; i < stages.size(); ++i) {
+        const auto &stage = stages.at(i);
+        const QString command = stage.words.first();
+        if (stages.size() > 1 && commands.contains(command) && !textCommands.contains(command))
+            return fail(command + ": this command cannot be used in a pipeline");
+        if ((command == "browser" || command == "edit" || command == "vim" || command == "clear")
+            && !stage.redirects.isEmpty()) return fail(command + ": redirection is not supported for this interactive command");
+        if (command == "history" && stage.words.contains("-c") && stages.size() > 1)
+            return fail("history: -c cannot be used in a pipeline");
+    }
+    QString input, diagnostics;
+    CommandResult final;
+    for (int i = 0; i < stages.size(); ++i) {
+        const auto &stage = stages.at(i);
+        const QString command = stage.words.first();
+        bool hasInput = i > 0;
+        QString inputFile, outputFile;
+        bool append = false, redirected = false, prepared = true;
+        CommandResult result;
+        // Prepare redirections before executing the command, in lexical order.
+        // In particular, `cat file > file` reads the already-truncated file.
+        for (const auto &redirect : stage.redirects) {
+            if (redirect.op == "<") {
+                inputFile = resolve(redirect.path);
+                result = readFile(inputFile);
+                hasInput = true;
+            } else {
+                redirected = true;
+                outputFile = resolve(redirect.path);
+                append = redirect.op == ">>";
+                result = writeFile(outputFile, {}, append);
+            }
+            if (result.error) { prepared = false; break; }
+        }
+        if (prepared && !inputFile.isEmpty()) {
+            result = readFile(inputFile);
+            if (result.error) prepared = false;
+            else input = result.text;
+        }
+        if (prepared) result = executeCommand(command, stage.words.mid(1), input, hasInput,
+            redirected || i + 1 < stages.size());
+        if (result.error && result.diagnostics.isEmpty()) {
+            result.diagnostics = result.text + '\n';
+            result.text.clear();
+        }
+        if (prepared && result.output.isNull() && !result.error) {
+            result.output = result.text;
+            if (command != "cat" && command != "grep" && command != "less"
+                && (!result.output.isEmpty() || command == "echo")) result.output += '\n';
+        }
+        if (prepared && redirected) {
+            const auto saved = writeFile(outputFile, result.output, true);
+            if (saved.error) {
+                result.diagnostics += saved.text + '\n';
+                result.error = true;
+                result.exitCode = 1;
+            }
+            result.output.clear();
+            result.text.clear();
+        }
+        diagnostics += result.diagnostics;
+        input = result.output;
+        final = result;
+    }
+    final.diagnostics = diagnostics;
+    final.error = !diagnostics.isEmpty();
+    return final;
+}
+
+CommandResult TerminalCore::executeCommand(const QString &command, QStringList args,
+    const QString &input, bool hasInput, bool streamOutput) {
+    if (!commands.contains(command)) return fail(command + ": command not found. Type 'help' for commands.", 127);
+    if (command == "history") {
+        if (args == QStringList{"-c"}) {
+            m_history.clear();
+            m_historyWritable = true;
+            saveHistory();
+            return {};
+        }
+        bool valid = true;
+        int count = args.isEmpty() ? m_history.size() : args.first().toInt(&valid);
+        if (!valid || count < 0 || args.size() > 1) return fail("usage: history [count] or history -c");
+        QStringList lines;
+        for (int i = qMax(0, int(m_history.size()) - count); i < m_history.size(); ++i)
+            lines.append(QString("%1  %2").arg(i + 1, 5).arg(m_history.at(i)));
+        return {lines.join('\n')};
+    }
+    if (command == "grep") return grep(args, input, hasInput);
+    if (command == "cat" || command == "less") {
+        if (!args.isEmpty() && args.first() == "--") args.removeFirst();
+        if (command == "less" && args.size() > 1) return fail("usage: less [file] (or command | less)");
+        if (args.isEmpty()) args.append("-");
+        CommandResult result;
+        result.output = QStringLiteral("");
+        bool consumed = false;
+        for (const auto &arg : args) {
+            const auto read = arg == "-"
+                ? (hasInput ? CommandResult{consumed ? QString() : input} : fail(command + ": provide a file, a pipe, or '< file'"))
+                : readFile(resolve(arg));
+            if (arg == "-") consumed = true;
+            if (read.error) result.diagnostics += command + ": " + read.text + '\n';
+            else result.output += read.text;
+        }
+        result.error = !result.diagnostics.isEmpty();
+        result.exitCode = result.error ? 1 : 0;
+        result.text = result.output;
+        result.openPager = command == "less" && !streamOutput && !result.error;
+        result.pagerTitle = args == QStringList{"-"} ? "(standard input)" : args.first();
+        return result;
     }
     if (command == "echo") return {args.join(' ')};
     if (command == "browser") {
@@ -404,7 +617,10 @@ CommandResult TerminalCore::execute(const QString &line) {
             "  ls [-a] [path]       List files and directories\n"
             "  cd [path]            Change directory; no path returns home\n"
             "  pwd                  Print the current directory\n"
-            "  cat <file>           Read a text file\n"
+            "  cat [file ...]       Read text files or piped input\n"
+            "  grep -F[nirv] ...    Search literal text; -n lines, -i ignore case, -r recursive\n"
+            "  less [file]          Page through text; / search, n/N next/previous, q quit\n"
+            "  history [count]      Show saved commands; history -c clears history\n"
             "  mkdir [-p] <path>    Create a directory\n"
             "  touch <file>         Create a file; keep existing content\n"
             "  edit <file>          Open the text editor\n"
@@ -413,14 +629,16 @@ CommandResult TerminalCore::execute(const QString &line) {
             "  cp [-r] <src> <dst>  Copy a file; -r copies directories\n"
             "  rm [-r] <path>       Delete a file; -r deletes directories\n"
             "  echo [text]          Print text\n"
-            "  echo ... > <file>    Overwrite a file with one line\n"
-            "  echo ... >> <file>   Append a line to a file\n"
+            "  command > file      Save stdout (overwrite); >> appends\n"
+            "  command < file      Read stdin from a UTF-8 file\n"
+            "  command | command   Send stdout to the next text command\n"
             "  whoami               Show the current user\n"
             "  clear                Clear the screen\n"
             "  help                 Show this help\n\n"
             "PATHS   / absolute   .. parent   ~ home   cd - previous\n"
-            "KEYS    Up/Down history   Tab complete   Ctrl+L clear   F1 help\n\n"
-            "Files and the current directory persist between sessions.\n"
+            "KEYS    Up/Down history   Ctrl+R search   Tab complete   Ctrl+L clear   F1 help\n"
+            "EDIT    Ctrl+A/E start/end   Alt+B/F word   Ctrl+U/K/W cut   Ctrl+Y yank\n\n"
+            "Files, the current directory, and up to 1000 commands persist between sessions.\n"
             "cp and mv never overwrite an existing destination."};
     }
     if (command == "clear" || command == "pwd" || command == "whoami") {
@@ -459,7 +677,7 @@ CommandResult TerminalCore::execute(const QString &line) {
         if (!error.isEmpty()) return fail("ls: " + error);
         if (!QFileInfo::exists(native)) return fail("ls: " + path + ": no such file or directory");
         if (!QFileInfo(native).isDir()) return {path.section('/', -1)};
-        return {children(path, hidden).join("    ")};
+        return {children(path, hidden).join(streamOutput ? "\n" : "    ")};
     }
     if (command == "mkdir") {
         bool parents = false;
@@ -531,40 +749,151 @@ CommandResult TerminalCore::execute(const QString &line) {
     return readFile(path);
 }
 
-Completion TerminalCore::complete(const QString &line) const {
-    Completion result{line, {}};
-    if (line.contains('"') || line.contains('\'') || line.contains('\\')) return result;
-    if (!line.contains(' ')) {
-        for (const auto &command : commands)
-            if (command.startsWith(line)) result.candidates.append(command);
-        if (result.candidates.size() == 1) result.replacement = result.candidates.first() + ' ';
-    } else {
-        const int start = line.lastIndexOf(' ') + 1;
-        const QString token = line.mid(start);
-        const int slash = token.lastIndexOf('/');
-        const QString prefix = slash < 0 ? QString() : token.left(slash + 1);
-        const QString partial = token.mid(slash + 1);
-        const QString directory = resolve(prefix.isEmpty() ? "." : prefix);
-        const QString command = line.section(' ', 0, 0);
-        QString error;
-        const QString native = physicalPath(directory, error);
-        if (!error.isEmpty() || !QFileInfo(native).isDir()) return result;
-        for (const auto &entry : children(directory, partial.startsWith('.'))) {
-            if (!entry.startsWith(partial)) continue;
-            if ((command == "cd" || command == "mkdir") && !entry.endsWith('/')) continue;
-            QString candidate = prefix + entry;
-            candidate.replace(" ", "\\ ");
-            result.candidates.append(candidate);
+CommandResult TerminalCore::grep(QStringList args, const QString &input, bool hasInput) const {
+    bool fixed = false, numbered = false, recursive = false, ignoreCase = false, invert = false;
+    bool options = true;
+    QStringList operands;
+    for (const auto &arg : args) {
+        if (options && arg == "--") { options = false; continue; }
+        if (options && operands.isEmpty() && arg.startsWith('-') && arg != "-") {
+            for (const auto flag : arg.mid(1)) {
+                if (flag == 'F') fixed = true;
+                else if (flag == 'n') numbered = true;
+                else if (flag == 'i') ignoreCase = true;
+                else if (flag == 'r') recursive = true;
+                else if (flag == 'v') invert = true;
+                else return fail("grep: unsupported option -" + QString(flag) + "; use grep -F[nirv] pattern [file ...]", 2);
+            }
+        } else { operands.append(arg); options = false; }
+    }
+    if (!fixed) return fail("grep: regular expressions are not implemented; use -F for literal text", 2);
+    if (operands.isEmpty()) return fail("usage: grep -F[nirv] <pattern> [file ...]", 2);
+    const QStringList patterns = operands.takeFirst().split('\n');
+    if (operands.isEmpty()) operands.append(recursive && !hasInput ? "." : "-");
+    CommandResult result;
+    result.output = QStringLiteral("");
+    bool matched = false;
+    const bool filenames = recursive || operands.size() > 1;
+    const auto select = [&](const QString &text, const QString &label) {
+        const QStringList lines = text.split('\n');
+        for (int i = 0; i < lines.size(); ++i) {
+            if (i == lines.size() - 1 && lines.at(i).isEmpty()) break;
+            const bool contains = std::any_of(patterns.begin(), patterns.end(), [&](const QString &pattern) {
+                return lines.at(i).contains(pattern, ignoreCase ? Qt::CaseInsensitive : Qt::CaseSensitive);
+            });
+            if (contains == invert) continue;
+            matched = true;
+            if (filenames) result.output += label + ':';
+            if (numbered) result.output += QString::number(i + 1) + ':';
+            result.output += lines.at(i) + '\n';
         }
-        if (result.candidates.size() == 1) {
-            const auto &candidate = result.candidates.first();
-            result.replacement = line.left(start) + candidate + (candidate.endsWith('/') ? "" : " ");
-        } else if (!result.candidates.isEmpty()) {
-            QString common = result.candidates.first();
-            for (const auto &candidate : result.candidates)
-                while (!candidate.startsWith(common)) common.chop(1);
-            if (common.size() > token.size()) result.replacement = line.left(start) + common;
+    };
+    std::function<void(const QString &)> visit = [&](const QString &name) {
+        QString error;
+        const QString native = physicalPath(resolve(name), error);
+        if (!error.isEmpty()) { result.diagnostics += "grep: " + name + ": " + error + '\n'; return; }
+        if (QFileInfo(native).isDir()) {
+            if (!recursive) { result.diagnostics += "grep: " + name + ": is a directory (use -r)\n"; return; }
+            const QDir dir(native);
+            if (!dir.isReadable()) { result.diagnostics += "grep: " + name + ": permission denied\n"; return; }
+            for (const auto &info : dir.entryInfoList(QDir::AllEntries | QDir::Hidden | QDir::System | QDir::NoDotAndDotDot,
+                     QDir::Name)) {
+                if (isLink(info)) continue;
+                visit((name.endsWith('/') ? name : name + '/') + info.fileName());
+            }
+        } else {
+            const auto read = readFile(resolve(name));
+            if (read.error) result.diagnostics += "grep: " + read.text + '\n';
+            else select(read.text, name);
+        }
+    };
+    bool consumed = false;
+    for (const auto &name : operands) {
+        if (name == "-") {
+            if (!hasInput) result.diagnostics += "grep: provide a file, a pipe, or '< file'\n";
+            else if (!consumed) select(input, "(standard input)");
+            consumed = true;
+        } else visit(name);
+    }
+    result.error = !result.diagnostics.isEmpty();
+    result.exitCode = result.error ? 2 : (matched ? 0 : 1);
+    result.text = result.output;
+    return result;
+}
+
+Completion TerminalCore::complete(const QString &line, int position) const {
+    if (position < 0) position = line.size();
+    position = qBound(0, position, int(line.size()));
+    Completion result{line, {}, position};
+    QString error;
+    const auto tokens = tokenize(line, error, true);
+    int start = position, end = position, index = tokens.size();
+    for (int i = 0; i < tokens.size(); ++i) {
+        const auto &token = tokens.at(i);
+        if (position >= token.start && position <= token.end && !token.control) {
+            start = token.start; end = token.end; index = i; break;
+        }
+        if (token.start >= position) { index = i; break; }
+    }
+    const auto fragment = tokenize(line.mid(start, position - start), error, true);
+    const QString partial = fragment.isEmpty() ? QString() : fragment.last().text;
+    QString command;
+    bool redirection = false;
+    for (int i = 0; i < index; ++i) {
+        const auto &token = tokens.at(i);
+        if (token.control && token.text == "|") { command.clear(); redirection = false; }
+        else if (token.control) redirection = true;
+        else if (redirection) redirection = false;
+        else if (command.isEmpty()) command = token.text;
+    }
+    const bool commandPosition = command.isEmpty() && !redirection;
+    QStringList candidates;
+    if (commandPosition) {
+        for (const auto &name : commands) if (name.startsWith(partial)) candidates.append(name);
+    } else {
+        const int slash = partial.lastIndexOf('/');
+        const QString prefix = slash < 0 ? QString() : partial.left(slash + 1);
+        const QString name = partial.mid(slash + 1);
+        const QString directory = resolve(prefix.isEmpty() ? "." : prefix);
+        for (const auto &entry : children(directory, name.startsWith('.'))) {
+            if (!entry.startsWith(name)) continue;
+            if (!redirection && (command == "cd" || command == "mkdir") && !entry.endsWith('/')) continue;
+            candidates.append(prefix + entry);
         }
     }
+    const QChar quote = start < line.size() && (line.at(start) == '\'' || line.at(start) == '"') ? line.at(start) : QChar();
+    const auto encode = [&](QString value, bool close) {
+        if (quote == '\'') {
+            value.replace("'", "'\\''");
+            return "'" + value + (close ? "'" : "");
+        }
+        if (quote == '"') {
+            value.replace("\\", "\\\\"); value.replace("\"", "\\\"");
+            return "\"" + value + (close ? "\"" : "");
+        }
+        QString encoded;
+        for (const auto c : value) {
+            if (c.isSpace() || QStringLiteral("\\\"'|><;&()`").contains(c)) encoded += '\\';
+            encoded += c;
+        }
+        return encoded;
+    };
+    for (const auto &candidate : candidates) result.candidates.append(encode(candidate, true));
+    if (candidates.isEmpty()) return result;
+    QString replacement = candidates.first();
+    if (candidates.size() > 1) {
+        if (position != end) return result;
+        for (const auto &candidate : candidates)
+            while (!candidate.startsWith(replacement)) replacement.chop(1);
+        if (!replacement.isEmpty() && replacement.back().isHighSurrogate()) replacement.chop(1);
+        if (replacement.size() <= partial.size()) return result;
+    }
+    const bool complete = candidates.size() == 1 && !replacement.endsWith('/');
+    const bool hadClosingQuote = !quote.isNull() && end > start + 1 && line.at(end - 1) == quote;
+    QString encoded = encode(replacement, complete || hadClosingQuote);
+    int cursor = start + encoded.size();
+    if (complete && (end == line.size() || !line.at(end).isSpace())) { encoded += ' '; ++cursor; }
+    result.replacement = line.left(start) + encoded + line.mid(end);
+    result.cursor = cursor;
     return result;
 }
