@@ -58,6 +58,7 @@
 
 - `AGENTS.md`、`README.md`、`docs/project-vision.md`、`docs/parallel-development.md`：共同原则、已有功能与协作方式。
 - `docs/roles/software.md`、`docs/roles/network.md`、`docs/roles/websites.md`、`docs/roles/browser.md`：相关方向的边界。
+- [拍照生成接口草案](../ai-camera-interface.md)与[固定摄像头设计](../fixed-camera-design.md)：已整合的跨方向建议，尚未实现或联调。
 - 必要时少量只读查看 `src/`、`CMakeLists.txt`、`assets/` 与 `tests/`，确认实际现状；无需为了初始化穷尽阅读源码。
 
 当前已有本地文件系统、命令、编辑器、浏览器和单账户登录；DeepSeek 与 ComfyUI 尚未接入。初始化时以实际仓库为准，区分已有实现、已确认方向和待讨论方案。

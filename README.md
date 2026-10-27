@@ -293,6 +293,7 @@ src/terminalappearance.* 登录页与终端共用的默认字体和外观读取
 src/terminalwidget.*     连续终端界面、输入保护、历史与补全交互
 src/vimeditor.*          终端内的简易 Vim，模式、编辑与搜索
 src/textpager.*          只读分页器，滚动、搜索和返回终端
+src/mcfilemanager.*      mc 双栏文件管理器，查看、Vim 编辑与文件操作
 src/browsercore.*        伪域名路由、收藏、历史导航和持久化
 src/textbrowser.*        纯文字浏览器界面、链接和键盘操作
 src/terminalcore.*       命令解析、受限文件读写和持久化
@@ -301,6 +302,7 @@ assets/sites/pages.json 本地网站的页面内容与链接
 tests/core_tests.cpp     命令和文件系统行为测试
 tests/account_tests.cpp  密码校验、账户持久化、损坏与并发保护测试
 tests/session_tests.cpp  首次设置、登录重试、退出与数据保留测试
+tests/mc_tests.cpp       mc 操作、文件持久化与终端/Vim/分页器衔接测试
 tests/vim_tests.cpp      Vim 按键、保存、退出和持久化测试
 tests/terminal_interaction_tests.cpp  历史搜索、输入编辑、补全与分页交互测试
 tests/browser_tests.cpp  网站路由、链接、历史和浏览器交互测试

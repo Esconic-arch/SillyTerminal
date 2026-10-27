@@ -779,5 +779,23 @@ bool TerminalWidget::smokeTest(const QString &appearancePreviewPath) {
     BrowserCore restoredBrowser(QFileInfo(m_core.worldRoot()).dir().filePath("browser.json"));
     if (!browserChecked || restoredBrowser.currentUrl() != BrowserCore::homeUrl()
         || !toPlainText().contains("A note written in vim.")) { qWarning("UI smoke check failed at line %d", __LINE__); return false; }
+    const QString beforeManager = toPlainText();
+    const QString directoryBeforeManager = m_core.currentPath();
+    bool managerChecked = false;
+    QTimer::singleShot(100, this, [this, &managerChecked, appearancePreviewPath] {
+        auto *quit = m_fileManager ? m_fileManager->findChild<QPushButton *>("mcAction10") : nullptr;
+        if (!quit) return;
+        managerChecked = m_fileManager->findChild<QWidget *>("mcLeftPanel")
+            && m_fileManager->findChild<QWidget *>("mcRightPanel");
+        if (!appearancePreviewPath.isEmpty())
+            managerChecked = m_fileManager->grab().save(appearancePreviewPath + ".mc.png") && managerChecked;
+        quit->click();
+    });
+    runCommand("mc");
+    if (!managerChecked || m_fileManager || m_core.currentPath() != directoryBeforeManager
+        || !toPlainText().startsWith(beforeManager) || !toPlainText().endsWith(m_core.prompt())) {
+        qWarning("UI smoke mc launch/return failed");
+        return false;
+    }
     return true;
 }

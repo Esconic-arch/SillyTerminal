@@ -42,6 +42,7 @@
 
 - `AGENTS.md`、`README.md`：共同原则、功能现状及构建方式。
 - `docs/project-vision.md`：已确认方向和待讨论方案。
+- [固定摄像头设计](../fixed-camera-design.md)与[拍照生成接口草案](../ai-camera-interface.md)：已有设备和 AI 协作建议，尚未实现或联调。
 - `docs/parallel-development.md`：工作目录和整合方式。
 - `src/terminalcore.*`：当前命令、路径、文件读写与状态持久化。
 - `src/terminalwidget.*`：命令入口、交互和功能集成。

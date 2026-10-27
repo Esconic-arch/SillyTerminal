@@ -69,7 +69,11 @@ int main(int argc, char **argv) {
     check(core.execute("whoami").text == "guest", "current user");
     check(core.execute("unknown").error, "unknown command");
     check(core.execute("edit notes.txt").exitCode == 127, "removed edit command is not available");
-    check(core.complete("e").replacement == "echo ", "completion offers echo without the removed edit command");
+    const auto eCompletion = core.complete("e");
+    check(eCompletion.replacement == "e" && eCompletion.candidates == QStringList{"echo", "exit"},
+        "completion keeps echo and login exit as ambiguous candidates without edit");
+    check(core.complete("ec").replacement == "echo " && core.complete("ed").candidates.isEmpty(),
+        "echo completes from an unambiguous prefix and removed edit is not offered");
     check(core.execute("clear").clear, "clear action");
     check(core.complete("pw").replacement == "pwd ", "command completion");
     check(core.complete("cd doc").replacement == "cd documents/", "directory completion");
