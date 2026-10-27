@@ -1,6 +1,7 @@
 #pragma once
 
 #include "localidentity.h"
+#include <QDateTime>
 #include <QList>
 #include <QString>
 #include <QStringList>
@@ -21,6 +22,21 @@ struct CommandResult {
     bool openPager = false;
     QString pagerTitle;
     bool endSession = false;
+    bool openFileManager = false;
+    QStringList managerPaths;
+};
+
+struct WorldEntry {
+    QString name;
+    bool directory = false;
+    qint64 size = 0;
+    QDateTime modified;
+};
+
+struct WorldDirectory {
+    QString path;
+    QList<WorldEntry> entries;
+    QString error;
 };
 
 struct Completion {
@@ -43,6 +59,13 @@ public:
     QString initializationError() const { return m_initializationError; }
     LocalIdentity identity() const { return m_identity; }
     CommandResult saveFile(const QString &path, const QString &content);
+    // Structured access for programs; uses the same world boundary as shell commands.
+    WorldDirectory listDirectory(const QString &path) const;
+    CommandResult readTextFile(const QString &path) const;
+    CommandResult copyEntry(const QString &source, const QString &destination);
+    CommandResult moveEntry(const QString &source, const QString &destination);
+    CommandResult removeEntry(const QString &path);
+    CommandResult createDirectory(const QString &path);
     static QString defaultWorldRoot();
 
 private:

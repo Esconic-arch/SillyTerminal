@@ -80,9 +80,13 @@ add_library(text_browser src/textbrowser.cpp src/textbrowser.h)
 target_link_libraries(text_browser PUBLIC browser_core Qt6::Widgets)
 target_include_directories(text_browser PUBLIC src)
 
+add_library(mc_file_manager src/mcfilemanager.cpp src/mcfilemanager.h)
+target_link_libraries(mc_file_manager PUBLIC terminal_core Qt6::Widgets)
+target_include_directories(mc_file_manager PUBLIC src)
+
 add_library(terminal_ui src/terminalwidget.cpp src/terminalwidget.h src/textpager.cpp src/textpager.h
     src/terminalappearance.cpp src/terminalappearance.h)
-target_link_libraries(terminal_ui PUBLIC terminal_core vim_editor text_browser Qt6::Widgets)
+target_link_libraries(terminal_ui PUBLIC terminal_core vim_editor text_browser mc_file_manager Qt6::Widgets)
 target_include_directories(terminal_ui PUBLIC src)
 
 add_library(local_session src/loginwidget.cpp src/loginwidget.h src/sessionwidget.cpp src/sessionwidget.h)
@@ -103,6 +107,10 @@ set_target_properties(SillyTerminal PROPERTIES
 
 include(CTest)
 if(BUILD_TESTING)
+    add_executable(mc_tests tests/mc_tests.cpp)
+    target_link_libraries(mc_tests PRIVATE terminal_ui)
+    add_test(NAME mc_file_manager COMMAND mc_tests)
+    set_tests_properties(mc_file_manager PROPERTIES TIMEOUT 25 ENVIRONMENT "QT_FORCE_STDERR_LOGGING=1")
     add_executable(account_store_tests tests/account_tests.cpp)
     target_link_libraries(account_store_tests PRIVATE local_account)
     add_test(NAME account_store COMMAND account_store_tests)
