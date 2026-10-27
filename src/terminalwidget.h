@@ -13,6 +13,7 @@ class TextBrowser;
 class QLineEdit;
 class QLabel;
 class TextPager;
+class McFileManager;
 
 class TerminalWidget : public QTextEdit {
 public:
@@ -48,6 +49,7 @@ private:
     VimEditor *m_vim = nullptr;
     TextBrowser *m_browser = nullptr;
     TextPager *m_pager = nullptr;
+    McFileManager *m_fileManager = nullptr;
 
     QString currentInput() const;
     void setInput(const QString &text);
@@ -66,4 +68,5 @@ private:
     void openVim(const QString &path, const QString &content);
     void openBrowser(const QString &address);
     void openPager(const QString &title, const QString &content);
+    void openFileManager(const QStringList &paths);
 };

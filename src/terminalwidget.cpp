@@ -2,6 +2,7 @@
 #include "vimeditor.h"
 #include "textbrowser.h"
 #include "textpager.h"
+#include "mcfilemanager.h"
 #include "terminalappearance.h"
 
 #include <QApplication>
@@ -144,6 +145,7 @@ void TerminalWidget::submit() {
     }
     if (result.clear) { clearScreen(); return; }
     if (result.openBrowser) openBrowser(result.browserUrl);
+    if (result.openFileManager) openFileManager(result.managerPaths);
     if (!result.editPath.isEmpty()) openVim(result.editPath, result.editContent);
     if (result.openPager) openPager(result.pagerTitle, result.output);
     else if (!result.output.isEmpty()) write(result.output, foreground);
@@ -420,6 +422,7 @@ void TerminalWidget::applyAppearance(const QFont &chosenFont, int lineSpacing, b
     if (m_vim) m_vim->setAppearance(chosenFont, m_lineSpacing);
     if (m_browser) m_browser->setAppearance(chosenFont, m_lineSpacing);
     if (m_pager) m_pager->setAppearance(chosenFont, m_lineSpacing);
+    if (m_fileManager) m_fileManager->setAppearance(chosenFont, m_lineSpacing);
     if (m_historySearch) m_historySearch->setFont(chosenFont);
     if (m_historySearchLabel) { m_historySearchLabel->setFont(chosenFont); layoutHistorySearch(); }
     if (save) {
@@ -436,7 +439,23 @@ void TerminalWidget::resizeEvent(QResizeEvent *event) {
     if (m_vim) m_vim->setGeometry(rect());
     if (m_browser) m_browser->setGeometry(rect());
     if (m_pager) m_pager->setGeometry(rect());
+    if (m_fileManager) m_fileManager->setGeometry(rect());
     if (m_historySearchLabel) layoutHistorySearch();
+}
+
+void TerminalWidget::openFileManager(const QStringList &paths) {
+    QEventLoop loop;
+    m_fileManager = new McFileManager(m_core, paths, font(), m_lineSpacing, [&loop] { loop.quit(); }, this);
+    m_fileManager->viewText = [this](const QString &path, const QString &content) { openPager(path, content); };
+    m_fileManager->editText = [this](const QString &path, const QString &content) { openVim(path, content); };
+    m_fileManager->setGeometry(rect());
+    m_fileManager->show();
+    m_fileManager->raise();
+    m_fileManager->focusPanel();
+    loop.exec();
+    delete m_fileManager;
+    m_fileManager = nullptr;
+    setFocus();
 }
 
 void TerminalWidget::openPager(const QString &title, const QString &content) {

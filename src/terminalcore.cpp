@@ -21,7 +21,7 @@
 
 namespace {
 const QStringList commands = {"browser", "cat", "cd", "clear", "cp", "echo", "exit", "grep", "help", "history", "less", "logout", "ls",
-    "mkdir", "mv", "pwd", "rm", "touch", "vim", "whoami"};
+    "mc", "mkdir", "mv", "pwd", "rm", "touch", "vim", "whoami"};
 constexpr int historyLimit = 1000;
 CommandResult fail(const QString &message, int status = 1) {
     CommandResult result{message, true, false};
@@ -398,6 +398,38 @@ CommandResult TerminalCore::saveFile(const QString &path, const QString &content
     return writeFile(resolve(path), content, false);
 }
 
+WorldDirectory TerminalCore::listDirectory(const QString &path) const {
+    WorldDirectory result;
+    result.path = resolve(path);
+    const QString native = physicalPath(result.path, result.error);
+    if (!result.error.isEmpty()) return result;
+    const QFileInfo directory(native);
+    if (!directory.exists()) result.error = result.path + ": no such file or directory";
+    else if (!directory.isDir()) result.error = result.path + ": not a directory";
+    else if (!directory.isReadable()) result.error = result.path + ": permission denied";
+    if (!result.error.isEmpty()) return result;
+    const auto filters = QDir::AllEntries | QDir::Hidden | QDir::System | QDir::NoDotAndDotDot;
+    for (const auto &info : QDir(native).entryInfoList(filters, QDir::DirsFirst | QDir::Name | QDir::IgnoreCase)) {
+        if (isLink(info) || (!info.isDir() && !info.isFile())) continue;
+        result.entries.append({info.fileName(), info.isDir(), info.size(), info.lastModified()});
+    }
+    return result;
+}
+
+CommandResult TerminalCore::readTextFile(const QString &path) const { return readFile(resolve(path)); }
+CommandResult TerminalCore::copyEntry(const QString &source, const QString &destination) {
+    return transfer("cp", {"-r", "--", source, destination});
+}
+CommandResult TerminalCore::moveEntry(const QString &source, const QString &destination) {
+    return transfer("mv", {"--", source, destination});
+}
+CommandResult TerminalCore::removeEntry(const QString &path) {
+    return executeCommand("rm", {"-r", "--", path}, {}, false, false);
+}
+CommandResult TerminalCore::createDirectory(const QString &path) {
+    return executeCommand("mkdir", {"--", path}, {}, false, false);
+}
+
 CommandResult TerminalCore::transfer(const QString &command, const QStringList &input) {
     QStringList args = input;
     bool recursive = false;
@@ -498,7 +530,7 @@ CommandResult TerminalCore::executePipeline(const QString &line) {
         const QString command = stage.words.first();
         if (stages.size() > 1 && commands.contains(command) && !textCommands.contains(command))
             return fail(command + ": this command cannot be used in a pipeline");
-        if ((command == "browser" || command == "vim" || command == "clear"
+        if ((command == "browser" || command == "vim" || command == "mc" || command == "clear"
             || command == "exit" || command == "logout")
             && !stage.redirects.isEmpty()) return fail(command + ": redirection is not supported for this interactive command");
         if (command == "history" && stage.words.contains("-c") && stages.size() > 1)
@@ -618,10 +650,29 @@ CommandResult TerminalCore::executeCommand(const QString &command, QStringList a
         if (!args.isEmpty()) result.browserUrl = args.first();
         return result;
     }
+    if (command == "mc") {
+        if (args == QStringList{"--help"} || args == QStringList{"-h"})
+            return {"Usage: mc [directory [other-directory]]\n"
+                "Open the two-panel file manager. F1 shows supported keys.\n"
+                "Use -- before a directory whose name begins with '-'."};
+        if (!args.isEmpty() && args.first() == "--") args.removeFirst();
+        else for (const auto &arg : args)
+            if (arg.startsWith('-')) return fail("mc: unsupported option " + arg + "; use mc --help");
+        if (args.size() > 2) return fail("usage: mc [directory [other-directory]]");
+        CommandResult result;
+        result.openFileManager = true;
+        for (const auto &arg : args) {
+            const auto directory = listDirectory(arg);
+            if (!directory.error.isEmpty()) return fail("mc: " + directory.error);
+            result.managerPaths.append(directory.path);
+        }
+        return result;
+    }
     if (command == "help") {
         if (!args.isEmpty()) return fail("usage: help");
         return {"AVAILABLE COMMANDS\n\n"
             "  browser [address]    Open the web browser\n"
+            "  mc [dir [other]]     Open the two-panel file manager\n"
             "  ls [-a] [path]       List files and directories\n"
             "  cd [path]            Change directory; no path returns home\n"
             "  pwd                  Print the current directory\n"
