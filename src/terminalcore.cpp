@@ -20,7 +20,7 @@
 #include <functional>
 
 namespace {
-const QStringList commands = {"browser", "cat", "cd", "clear", "cp", "echo", "edit", "grep", "help", "history", "less", "ls",
+const QStringList commands = {"browser", "cat", "cd", "clear", "cp", "echo", "grep", "help", "history", "less", "ls",
     "mkdir", "mv", "pwd", "rm", "touch", "vim", "whoami"};
 constexpr int historyLimit = 1000;
 CommandResult fail(const QString &message, int status = 1) {
@@ -497,7 +497,7 @@ CommandResult TerminalCore::executePipeline(const QString &line) {
         const QString command = stage.words.first();
         if (stages.size() > 1 && commands.contains(command) && !textCommands.contains(command))
             return fail(command + ": this command cannot be used in a pipeline");
-        if ((command == "browser" || command == "edit" || command == "vim" || command == "clear")
+        if ((command == "browser" || command == "vim" || command == "clear")
             && !stage.redirects.isEmpty()) return fail(command + ": redirection is not supported for this interactive command");
         if (command == "history" && stage.words.contains("-c") && stages.size() > 1)
             return fail("history: -c cannot be used in a pipeline");
@@ -623,7 +623,6 @@ CommandResult TerminalCore::executeCommand(const QString &command, QStringList a
             "  history [count]      Show saved commands; history -c clears history\n"
             "  mkdir [-p] <path>    Create a directory\n"
             "  touch <file>         Create a file; keep existing content\n"
-            "  edit <file>          Open the text editor\n"
             "  vim <file>           Edit inside the terminal (i, Esc, :wq)\n"
             "  mv <source> <dest>   Move or rename a file or directory\n"
             "  cp [-r] <src> <dst>  Copy a file; -r copies directories\n"
@@ -730,7 +729,7 @@ CommandResult TerminalCore::executeCommand(const QString &command, QStringList a
     }
     if (args.size() != 1) return fail("usage: " + command + " <file>");
     const QString path = resolve(args.first());
-    if (command == "edit" || command == "vim") {
+    if (command == "vim") {
         QString error;
         const QString native = physicalPath(path, error);
         if (!error.isEmpty()) return fail(command + ": " + error);
@@ -743,7 +742,6 @@ CommandResult TerminalCore::executeCommand(const QString &command, QStringList a
         CommandResult result;
         result.editPath = path;
         result.editContent = opened.text;
-        result.useVim = command == "vim";
         return result;
     }
     return readFile(path);

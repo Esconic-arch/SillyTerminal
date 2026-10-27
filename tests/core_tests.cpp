@@ -53,6 +53,8 @@ int main(int argc, char **argv) {
     check(core.execute("cd a b").error, "extra argument rejected");
     check(core.execute("whoami").text == "guest", "current user");
     check(core.execute("unknown").error, "unknown command");
+    check(core.execute("edit notes.txt").exitCode == 127, "removed edit command is not available");
+    check(core.complete("e").replacement == "echo ", "completion offers echo without the removed edit command");
     check(core.execute("clear").clear, "clear action");
     check(core.complete("pw").replacement == "pwd ", "command completion");
     check(core.complete("cd doc").replacement == "cd documents/", "directory completion");
@@ -146,7 +148,7 @@ int main(int argc, char **argv) {
     core.saveFile("documents/it's here.txt", "quoted name");
     const auto apostrophe = core.complete("cat 'documents/it");
     check(core.execute(apostrophe.replacement).text == "quoted name", "completion safely quotes apostrophes inside single quoted paths");
-    const auto opened = core.execute("edit journals/new.txt");
+    const auto opened = core.execute("vim journals/new.txt");
     check(!opened.error && opened.editPath == "/home/guest/journals/new.txt", "editor opens new file");
     check(!QFileInfo::exists(world + opened.editPath), "opening editor does not create a file");
     const QString edited = QString::fromUtf8("A journal.\n今天开始记录。\n");
@@ -185,8 +187,8 @@ int main(int argc, char **argv) {
     check(core.execute("mv /home /var/home").error, "current directory parent cannot move");
     check(core.execute("echo x > /home/guest/journals").error, "cannot redirect into directory");
     check(core.execute("touch absent/file.txt").error, "missing file parent rejected");
-    check(core.execute("edit absent/file.txt").error, "missing editor parent rejected");
-    check(core.execute("edit journals").error, "editor rejects directories");
+    check(core.execute("vim absent/file.txt").error, "missing editor parent rejected");
+    check(core.execute("vim journals").error, "editor rejects directories");
     check(core.execute("touch 'bad:name.txt'").error, "host drive and alternate-stream syntax rejected");
     check(core.execute("touch 'trailing.'").error, "Windows filename aliases rejected");
     check(core.execute("touch CON.txt").error, "device names rejected");
@@ -194,7 +196,7 @@ int main(int argc, char **argv) {
     check(invalidUtf8.open(QIODevice::WriteOnly), "create non-UTF-8 fixture");
     invalidUtf8.write(QByteArray::fromHex("fffe61"));
     invalidUtf8.close();
-    check(core.execute("edit invalid.txt").error, "editor rejects non-UTF-8 without changing bytes");
+    check(core.execute("vim invalid.txt").error, "editor rejects non-UTF-8 without changing bytes");
     core.execute("rm invalid.txt");
     check(core.execute("mkdir -p journals/todo.txt/child").error, "file cannot become parent directory");
     check(!core.execute("echo confined > /../../confined.txt").error, "parent traversal stays inside virtual root");
@@ -223,7 +225,7 @@ int main(int argc, char **argv) {
     check(restored.execute("cat ../notes.txt").error, "deleted initial file is not recreated");
     QFile initial(":/initial-world/home/guest/notes.txt");
     check(initial.open(QIODevice::ReadOnly) && initial.readAll().contains("Welcome back"), "initial template remains unchanged");
-    const auto editExisting = restored.execute("edit new.txt");
+    const auto editExisting = restored.execute("vim new.txt");
     check(editExisting.editContent == "external edit\n", "editor loads existing contents");
     restored.execute("cd /");
     check(!restored.execute("rm -r /home").error, "delete home after leaving it");

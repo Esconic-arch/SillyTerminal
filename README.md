@@ -57,7 +57,6 @@ guest@silly:~$ cat /var/log/boot.log
 | `history [数量]` / `history -c` | 查看保存的命令历史 / 清空历史 |
 | `mkdir [-p] <目录>` | 创建目录；`-p` 连同父目录一起创建 |
 | `touch <文件>` | 创建空文件，或更新时间；不清空已有内容 |
-| `edit <文件>` | 打开内置文本编辑器，也可以新建文件 |
 | `vim <文件>` | 在终端区域中使用简易 Vim 编辑文本 |
 | `browser [地址]` | 打开浏览器，省略地址进入收藏页 |
 | `mv <源> <目标>` | 移动或重命名文件、目录 |
@@ -77,14 +76,14 @@ mkdir journals
 touch journals/todo.txt
 echo 第一条记录 > journals/todo.txt
 echo 今天继续探索 >> journals/todo.txt
-edit journals/todo.txt
+vim journals/todo.txt
 cat journals/todo.txt
 cp journals/todo.txt journals/backup.txt
 mv journals/backup.txt journals/old.txt
 rm journals/old.txt
 ```
 
-`edit` 打开后可输入多行中文和文字，点击 **Save** 或按 **Ctrl+S**（macOS 为 **Command+S**）保存并返回终端；点击 **Cancel** 或按 **Esc** 放弃本次编辑。新文件只在保存时创建。编辑器和 `cat` 读取 UTF-8 文本，不会把二进制或其他编码的文件自动转换后覆盖。
+文件编辑统一使用 `vim`：打开后按 `i` 输入，按 `Esc` 返回普通模式，再输入 `:wq` 保存并退出，或 `:q!` 放弃本次修改。新文件只在保存时创建。Vim 和 `cat` 读取 UTF-8 文本，不会把二进制或其他编码的文件自动转换后覆盖。
 
 ### 搜索、管道与重定向
 
@@ -102,7 +101,7 @@ grep -Fn "warning" < /var/log/boot.log >> matches.txt
 
 `|` 把前一条命令的标准输出送到后一条，支持连续多级管道。`>` 在命令执行前创建或清空目标文件，`>>` 追加且不会自动补入分隔换行，`<` 从文件提供输入。错误信息始终显示在终端，不进入管道或结果文件。与常用 Shell 一样，`cat file > file` 会先清空文件，读取失败的命令也可能留下空的重定向文件。`ls` 在管道和重定向中每行输出一个名称。
 
-首版管道支持 `cat`、`echo`、`grep`、`help`、`history`、`less`、`ls`、`pwd` 和 `whoami`。每条命令最多一个输入和一个输出重定向；交互式 `browser`、`edit`、`vim` 和 `clear` 不接受重定向，改变文件或当前目录的命令不放入管道。暂不支持 `&&`、`||`、`;`、后台任务、文件描述符重定向、通配符或变量展开。引号或反斜杠保护的 `|`、`<`、`>` 是普通文字。
+首版管道支持 `cat`、`echo`、`grep`、`help`、`history`、`less`、`ls`、`pwd` 和 `whoami`。每条命令最多一个输入和一个输出重定向；交互式 `browser`、`vim` 和 `clear` 不接受重定向，改变文件或当前目录的命令不放入管道。暂不支持 `&&`、`||`、`;`、后台任务、文件描述符重定向、通配符或变量展开。引号或反斜杠保护的 `|`、`<`、`>` 是普通文字。
 
 `grep` 只处理 UTF-8 文本，`-r` 会搜索隐藏文件并跳过符号链接和目录联接。没有匹配时不显示错误；文件读取失败时会显示具体原因。它保留真实工具的退出状态约定：匹配为 0，无匹配为 1，读取或参数错误为 2。当前终端不提供 `$?` 展开。
 
@@ -145,7 +144,7 @@ grep -Fn "warning" < /var/log/boot.log >> matches.txt
 | 命令行 | `:x` | 有修改时保存，然后退出 |
 | 命令行 | `:help` / `F1` | 查看简短按键提示 |
 
-命令行或搜索输入中也可以按 `Esc` 取消。新文件在 `:w` 或 `:wq` 保存后才会创建；编辑内容仍保存在 `runtime/world/` 中。原有的 `edit` 命令继续提供独立窗口编辑。
+命令行或搜索输入中也可以按 `Esc` 取消。新文件在 `:w` 或 `:wq` 保存后才会创建；编辑内容仍保存在 `runtime/world/` 中。
 
 这是模拟的 Vim 常用功能子集，不是系统 Vim：暂不支持数字次数（例如 `3dd`）、可视模式、正则搜索、替换、宏、插件或另存为。搜索按普通文字匹配；`w` / `b` 使用 Qt 的单词边界。编辑窗口会把换行显示为统一的换行符，明确保存时以 UTF-8、LF 换行写入。
 

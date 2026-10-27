@@ -163,7 +163,7 @@ int main(int argc, char **argv) {
         if (!temporary.isValid()) return 2;
         TerminalCore core(temporary.path() + "/world");
         const auto opened = core.execute("vim 'new note.txt'");
-        check(opened.useVim && !opened.error && opened.editContent.isEmpty(), "vim command opens a new file");
+        check(opened.editPath == "/home/guest/new note.txt" && !opened.error && opened.editContent.isEmpty(), "vim command opens a new file");
         bool closed = false;
         VimEditor editor(opened.editPath, opened.editContent, font, 115,
             [&](const QString &text) { return core.saveFile(opened.editPath, text); }, [&] { closed = true; });
