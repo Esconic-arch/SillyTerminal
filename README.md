@@ -42,6 +42,16 @@ dist\SillyTerminal\SillyTerminal.exe
 
 ## 怎么操作
 
+### AI 服务配置
+
+点击窗口右上角 **AI**，可以配置 DeepSeek 的 API 根地址、密钥和模型，以及自托管 ComfyUI 的服务器地址和可选 Bearer token。登录前也能打开设置。
+
+DeepSeek 默认地址为 `https://api.deepseek.com`；**Test connection / load models** 检查 API 访问并加载模型列表。ComfyUI 默认地址为 `http://127.0.0.1:8188`；**Test connection** 检查服务器是否返回系统信息。这些检查不生成文字或图片。检查当前草稿后，点击 **Save** 保存，**Cancel** 放弃修改。
+
+服务配置属于宿主应用的用户设置。密钥使用 Windows Credential Manager 或 macOS Keychain 保存，和游戏内账户、文件与命令历史分开。当前已完成配置和连接检查，摄像头拍照及组合生成流程仍待实现。说明和验证范围见 [AI 服务配置](docs/ai-service-configuration.md)。
+
+### 终端命令
+
 在提示符后输入命令，按回车执行。当前目录初始为 `/home/guest`，显示为 `~`。
 
 ```text

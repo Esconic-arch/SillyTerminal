@@ -1,6 +1,7 @@
 #include "terminalwidget.h"
 #include "sessionwidget.h"
 #include "loginwidget.h"
+#include "aisettingsdialog.h"
 
 #include <QApplication>
 #include <QEventLoop>
@@ -101,6 +102,19 @@ int main(int argc, char *argv[]) {
     headerLayout->addWidget(sessionLabel);
     headerLayout->addStretch();
     headerLayout->addWidget(path);
+    auto *services = new QPushButton("AI", header);
+    services->setObjectName("aiServicesButton");
+    services->setToolTip("Configure DeepSeek and ComfyUI services");
+    services->setCursor(Qt::PointingHandCursor);
+    services->setFixedSize(32, 26);
+    services->setStyleSheet(
+        "QPushButton { color: #b2b2bd; font-size: 12px; background: transparent; border: none; border-radius: 4px; }"
+        "QPushButton:hover { color: #dedee5; background: #393940; }");
+    QObject::connect(services, &QPushButton::clicked, &window, [&window] {
+        AiSettingsDialog dialog(&window);
+        dialog.exec();
+    });
+    headerLayout->addWidget(services);
     auto *appearance = new QPushButton("Aa", header);
     appearance->setToolTip("Font & spacing (Ctrl+, / Command+,)");
     appearance->setCursor(Qt::PointingHandCursor);

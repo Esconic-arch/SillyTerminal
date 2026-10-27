@@ -12,6 +12,18 @@ add_library(local_account src/accountstore.cpp src/accountstore.h src/localident
 target_link_libraries(local_account PUBLIC Qt6::Core PRIVATE Qt6::Network)
 target_include_directories(local_account PUBLIC src)
 
+add_library(ai_services src/aiservices.cpp src/aiservices.h src/aicredentials.cpp)
+target_link_libraries(ai_services PUBLIC Qt6::Network)
+target_include_directories(ai_services PUBLIC src)
+if(WIN32)
+    target_link_libraries(ai_services PRIVATE advapi32)
+elseif(APPLE)
+    target_link_libraries(ai_services PRIVATE "-framework Security" "-framework CoreFoundation")
+endif()
+add_library(ai_settings_ui src/aisettingsdialog.cpp src/aisettingsdialog.h)
+target_link_libraries(ai_settings_ui PUBLIC ai_services Qt6::Widgets)
+target_include_directories(ai_settings_ui PUBLIC src)
+
 add_library(terminal_core src/terminalcore.cpp src/terminalcore.h)
 target_link_libraries(terminal_core PUBLIC Qt6::Core)
 target_include_directories(terminal_core PUBLIC src)
@@ -96,7 +108,7 @@ target_include_directories(local_session PUBLIC src)
 qt_add_executable(SillyTerminal
     src/main.cpp
 )
-target_link_libraries(SillyTerminal PRIVATE local_session)
+target_link_libraries(SillyTerminal PRIVATE local_session ai_settings_ui)
 set_target_properties(SillyTerminal PROPERTIES
     WIN32_EXECUTABLE TRUE
     MACOSX_BUNDLE TRUE
@@ -107,6 +119,10 @@ set_target_properties(SillyTerminal PROPERTIES
 
 include(CTest)
 if(BUILD_TESTING)
+    add_executable(ai_services_tests tests/ai_services_tests.cpp)
+    target_link_libraries(ai_services_tests PRIVATE ai_settings_ui)
+    add_test(NAME ai_services COMMAND ai_services_tests)
+    set_tests_properties(ai_services PROPERTIES TIMEOUT 25 ENVIRONMENT "QT_FORCE_STDERR_LOGGING=1")
     add_executable(mc_tests tests/mc_tests.cpp)
     target_link_libraries(mc_tests PRIVATE terminal_ui)
     add_test(NAME mc_file_manager COMMAND mc_tests)

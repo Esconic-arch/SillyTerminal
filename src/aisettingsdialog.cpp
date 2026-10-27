@@ -1,0 +1,229 @@
+#include "aisettingsdialog.h"
+
+#include <QComboBox>
+#include <QDialogButtonBox>
+#include <QFormLayout>
+#include <QGroupBox>
+#include <QHBoxLayout>
+#include <QLabel>
+#include <QLineEdit>
+#include <QPalette>
+#include <QPushButton>
+#include <QSignalBlocker>
+#include <QSpinBox>
+#include <QVBoxLayout>
+
+namespace {
+QLabel *statusLabel(const QString &name, QWidget *parent) {
+    auto *label = new QLabel(parent);
+    label->setObjectName(name);
+    label->setTextFormat(Qt::PlainText);
+    label->setWordWrap(true);
+    label->setMinimumHeight(label->fontMetrics().height() * 2);
+    return label;
+}
+void showStatus(QLabel *label, const QString &text, bool success = false) {
+    label->setText(text);
+    label->setStyleSheet(success ? "color: #a5d6ae;" : "color: #f0a6a9;");
+}
+QWidget *keyRow(QLineEdit *input, bool *unavailable, QWidget *parent) {
+    auto *row = new QWidget(parent);
+    auto *layout = new QHBoxLayout(row);
+    layout->setContentsMargins(0, 0, 0, 0);
+    input->setEchoMode(QLineEdit::Password);
+    input->setMaxLength(2048);
+    auto *show = new QPushButton("Show", row);
+    show->setCheckable(true);
+    show->setFixedWidth(62);
+    show->setAutoDefault(false);
+    auto *clear = new QPushButton("Clear", row);
+    clear->setObjectName(input->objectName() + "Clear");
+    clear->setFixedWidth(62);
+    clear->setAutoDefault(false);
+    QObject::connect(show, &QPushButton::toggled, input, [input, show](bool checked) {
+        input->setEchoMode(checked ? QLineEdit::Normal : QLineEdit::Password);
+        show->setText(checked ? "Hide" : "Show");
+    });
+    QObject::connect(clear, &QPushButton::clicked, input, [input, unavailable] {
+        input->clear(); *unavailable = false;
+    });
+    QObject::connect(input, &QLineEdit::textEdited, input, [unavailable] { *unavailable = false; });
+    layout->addWidget(input, 1);
+    layout->addWidget(show);
+    layout->addWidget(clear);
+    return row;
+}
+}
+
+AiSettingsDialog::AiSettingsDialog(QWidget *parent, const AiSettingsStore &store)
+    : QDialog(parent), m_store(store) {
+    setObjectName("aiSettingsDialog");
+    setWindowTitle("AI services");
+    auto colors = palette();
+    colors.setColor(QPalette::PlaceholderText, QColor("#92939f"));
+    setPalette(colors);
+    setMinimumWidth(640);
+    auto *layout = new QVBoxLayout(this);
+    layout->setContentsMargins(20, 18, 20, 18);
+    layout->setSpacing(12);
+    auto *intro = new QLabel("Configure the external services used by SillyTerminal.", this);
+    intro->setWordWrap(true);
+    layout->addWidget(intro);
+
+    m_deepSeekGroup = new QGroupBox("DeepSeek", this);
+    auto *deepSeekForm = new QFormLayout(m_deepSeekGroup);
+    deepSeekForm->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
+    m_deepSeekUrl = new QLineEdit(m_deepSeekGroup);
+    m_deepSeekUrl->setObjectName("deepSeekUrl");
+    m_deepSeekUrl->setPlaceholderText("https://api.deepseek.com");
+    m_deepSeekUrl->setMaxLength(2048);
+    m_deepSeekUrl->setToolTip("API base URL, optionally ending in /v1. Do not append /chat/completions.");
+    deepSeekForm->addRow("API base URL", m_deepSeekUrl);
+    m_deepSeekKey = new QLineEdit(m_deepSeekGroup);
+    m_deepSeekKey->setObjectName("deepSeekKey");
+    deepSeekForm->addRow("API key", keyRow(m_deepSeekKey, &m_deepSeekKeyUnavailable, m_deepSeekGroup));
+    m_model = new QComboBox(m_deepSeekGroup);
+    m_model->setObjectName("deepSeekModel");
+    m_model->setEditable(true);
+    m_model->lineEdit()->setMaxLength(256);
+    m_model->setToolTip("Check the connection to load available models, or enter a model name.");
+    deepSeekForm->addRow("Model", m_model);
+    auto *deepSeekTest = new QPushButton("Test connection / load models", m_deepSeekGroup);
+    deepSeekTest->setObjectName("testDeepSeek");
+    deepSeekTest->setAutoDefault(false);
+    deepSeekForm->addRow(QString(), deepSeekTest);
+    m_deepSeekStatus = statusLabel("deepSeekStatus", m_deepSeekGroup);
+    deepSeekForm->addRow(m_deepSeekStatus);
+    layout->addWidget(m_deepSeekGroup);
+
+    m_comfyUiGroup = new QGroupBox("ComfyUI (self-hosted server)", this);
+    auto *comfyUiForm = new QFormLayout(m_comfyUiGroup);
+    comfyUiForm->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
+    m_comfyUiUrl = new QLineEdit(m_comfyUiGroup);
+    m_comfyUiUrl->setObjectName("comfyUiUrl");
+    m_comfyUiUrl->setPlaceholderText("http://127.0.0.1:8188");
+    m_comfyUiUrl->setMaxLength(2048);
+    comfyUiForm->addRow("Server URL", m_comfyUiUrl);
+    m_comfyUiKey = new QLineEdit(m_comfyUiGroup);
+    m_comfyUiKey->setObjectName("comfyUiKey");
+    m_comfyUiKey->setPlaceholderText("Optional; leave blank for a local server");
+    m_comfyUiKey->setToolTip("Optional Bearer token for a server behind an authenticated proxy.");
+    comfyUiForm->addRow("Bearer token", keyRow(m_comfyUiKey, &m_comfyUiKeyUnavailable, m_comfyUiGroup));
+    auto *comfyUiTest = new QPushButton("Test connection", m_comfyUiGroup);
+    comfyUiTest->setObjectName("testComfyUi");
+    comfyUiTest->setAutoDefault(false);
+    comfyUiForm->addRow(QString(), comfyUiTest);
+    m_comfyUiStatus = statusLabel("comfyUiStatus", m_comfyUiGroup);
+    comfyUiForm->addRow(m_comfyUiStatus);
+    layout->addWidget(m_comfyUiGroup);
+
+    auto *timeoutRow = new QFormLayout;
+    m_timeout = new QSpinBox(this);
+    m_timeout->setObjectName("connectionTimeout");
+    m_timeout->setRange(1, 120);
+    m_timeout->setSuffix(" seconds");
+    timeoutRow->addRow("Connection timeout", m_timeout);
+    layout->addLayout(timeoutRow);
+    auto *note = new QLabel("Tests check API access only; they do not generate text or images.\n"
+        "Keys are saved in Windows Credential Manager or macOS Keychain.\n"
+        "These settings belong to the application, outside the simulated computer.", this);
+    note->setWordWrap(true);
+    note->setStyleSheet("color: #92939f;");
+    layout->addWidget(note);
+    m_status = statusLabel("aiSettingsStatus", this);
+    layout->addWidget(m_status);
+    auto *buttons = new QDialogButtonBox(QDialogButtonBox::Save | QDialogButtonBox::Cancel, this);
+    m_save = buttons->button(QDialogButtonBox::Save);
+    m_save->setObjectName("saveAiSettings");
+    connect(buttons, &QDialogButtonBox::accepted, this, &AiSettingsDialog::save);
+    connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
+    layout->addWidget(buttons);
+
+    QString error;
+    const bool loaded = m_store.load(&m_settings, &error);
+    m_deepSeekUrl->setText(m_settings.deepSeekUrl);
+    m_comfyUiUrl->setText(m_settings.comfyUiUrl);
+    m_model->setEditText(m_settings.deepSeekModel);
+    m_timeout->setValue(m_settings.timeoutSeconds);
+    QString key;
+    if (!loaded) {
+        showStatus(m_status, error);
+        m_save->setEnabled(false);
+        m_deepSeekGroup->setEnabled(false);
+        m_comfyUiGroup->setEnabled(false);
+        m_timeout->setEnabled(false);
+    } else {
+        if (m_store.readKey(m_settings.deepSeekKeyRef, &key, &error)) m_deepSeekKey->setText(key);
+        else {
+            m_deepSeekKeyUnavailable = true;
+            showStatus(m_deepSeekStatus, "Stored key could not be read. Re-enter it or choose Clear.");
+        }
+        if (m_store.readKey(m_settings.comfyUiKeyRef, &key, &error)) m_comfyUiKey->setText(key);
+        else {
+            m_comfyUiKeyUnavailable = true;
+            showStatus(m_comfyUiStatus, "Stored token could not be read. Re-enter it or choose Clear.");
+        }
+    }
+
+    const auto deepSeekChanged = [this] { m_deepSeekStatus->clear(); };
+    connect(m_deepSeekUrl, &QLineEdit::textChanged, this, deepSeekChanged);
+    connect(m_deepSeekKey, &QLineEdit::textChanged, this, deepSeekChanged);
+    connect(m_model, &QComboBox::currentTextChanged, this, deepSeekChanged);
+    const auto comfyUiChanged = [this] { m_comfyUiStatus->clear(); };
+    connect(m_comfyUiUrl, &QLineEdit::textChanged, this, comfyUiChanged);
+    connect(m_comfyUiKey, &QLineEdit::textChanged, this, comfyUiChanged);
+    connect(m_timeout, &QSpinBox::valueChanged, this, [this] {
+        m_deepSeekStatus->clear(); m_comfyUiStatus->clear();
+    });
+    connect(deepSeekTest, &QPushButton::clicked, this, [this] {
+        m_deepSeekBusy = true; updateBusy();
+        showStatus(m_deepSeekStatus, "Checking connection...", true);
+        m_deepSeekClient.checkDeepSeek(m_deepSeekUrl->text(), m_deepSeekKey->text(), m_timeout->value() * 1000);
+    });
+    connect(comfyUiTest, &QPushButton::clicked, this, [this] {
+        m_comfyUiBusy = true; updateBusy();
+        showStatus(m_comfyUiStatus, "Checking connection...", true);
+        m_comfyUiClient.checkComfyUi(m_comfyUiUrl->text(), m_comfyUiKey->text(), m_timeout->value() * 1000);
+    });
+    connect(&m_deepSeekClient, &AiConnectionClient::finished, this, [this](const AiConnectionResult &result) {
+        m_deepSeekBusy = false; updateBusy();
+        if (result.success) {
+            const QString selected = m_model->currentText();
+            const QSignalBlocker block(m_model);
+            m_model->clear(); m_model->addItems(result.models); m_model->setEditText(selected);
+            if (!result.models.contains(selected)) {
+                showStatus(m_deepSeekStatus, "Connected. Select a model from the list; the current name was not returned.");
+                return;
+            }
+        }
+        showStatus(m_deepSeekStatus, result.message, result.success);
+    });
+    connect(&m_comfyUiClient, &AiConnectionClient::finished, this, [this](const AiConnectionResult &result) {
+        m_comfyUiBusy = false; updateBusy();
+        showStatus(m_comfyUiStatus, result.message, result.success);
+    });
+}
+
+void AiSettingsDialog::updateBusy() {
+    m_deepSeekGroup->setEnabled(!m_deepSeekBusy);
+    m_comfyUiGroup->setEnabled(!m_comfyUiBusy);
+    m_timeout->setEnabled(!m_deepSeekBusy && !m_comfyUiBusy);
+    m_save->setEnabled(!m_deepSeekBusy && !m_comfyUiBusy);
+}
+
+void AiSettingsDialog::save() {
+    if (m_deepSeekKeyUnavailable || m_comfyUiKeyUnavailable) {
+        showStatus(m_status, "Re-enter the unavailable saved key, or choose Clear to remove it.");
+        return;
+    }
+    auto settings = m_settings;
+    settings.deepSeekUrl = m_deepSeekUrl->text();
+    settings.deepSeekModel = m_model->currentText();
+    settings.comfyUiUrl = m_comfyUiUrl->text();
+    settings.timeoutSeconds = m_timeout->value();
+    QString error;
+    if (!m_store.save(&settings, m_deepSeekKey->text(), m_comfyUiKey->text(), &error)) {
+        showStatus(m_status, error); return;
+    }
+    accept();
+}
