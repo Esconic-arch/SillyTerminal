@@ -10,6 +10,8 @@
 | 终端优化 | [terminal.md](terminal.md) |
 | 浏览器功能 | [browser.md](browser.md) |
 | 虚构网络与目标系统 | [network.md](network.md) |
+| 软件与扩展系统 | [software.md](software.md) |
+| AI 接入与生成系统 | [ai.md](ai.md) |
 | 整体设计与整合 | [integration.md](integration.md) |
 
 给新对话一句“请读取 `docs/roles/websites.md`，作为本对话的职责说明”即可指定网页方向。其他方向替换文件名。仅要求读取本说明时，先了解可选分工，不自行认领方向或开始开发。
