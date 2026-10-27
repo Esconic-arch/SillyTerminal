@@ -22,6 +22,21 @@ int main(int argc, char **argv) {
         if (!condition) { ++failures; std::fprintf(stderr, "FAIL: %s\n", name); }
     };
     check(core.execute("pwd").text == "/home/guest", "initial directory");
+    check(core.execute("exit").endSession && core.execute("logout").endSession, "session commands request logout");
+    check(core.execute("logout extra").error && !core.execute("exit extra").endSession, "session commands reject unsupported arguments");
+    check(core.execute("exit | cat").error && !core.execute("echo hello | logout").endSession,
+        "session commands cannot exit through unsupported pipelines");
+    check(core.execute("logout > denied.txt").error && !QFileInfo::exists(world + "/home/guest/denied.txt"),
+        "session redirection is rejected before changing files");
+    check(core.complete("logo").replacement == "logout ", "logout command completes");
+    {
+        LocalIdentity identity;
+        identity.userName = "operator";
+        identity.hostName = "workstation";
+        TerminalCore identified(temporary.path() + "/identified/world", identity);
+        check(identified.execute("whoami").text == "operator" && identified.prompt() == "operator@workstation:~$ ",
+            "whoami and prompt obtain their identity from the same session data");
+    }
     check(core.execute("ls").text.contains("documents/"), "list directories");
     check(!core.execute("ls").text.contains(".config"), "hidden entries omitted");
     check(core.execute("ls -a").text.contains(".config/"), "hidden entries shown");

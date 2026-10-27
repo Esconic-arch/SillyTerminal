@@ -45,6 +45,7 @@
 - `docs/parallel-development.md`：工作目录和整合方式。
 - `src/terminalcore.*`：当前命令、路径、文件读写与状态持久化。
 - `src/terminalwidget.*`：命令入口、交互和功能集成。
+- `src/accountstore.*`、`src/localidentity.h`、`src/sessionwidget.*`：当前单账户本地登录及共享身份；远程账户和权限仍需另行设计。
 - `src/browsercore.*`：现有伪域名、文档路由与浏览状态。
 - `assets/initial-world/`、`assets/sites/`：当前初始电脑和网站内容。
 - `tests/`：现有相关检查，初始化时只读了解。

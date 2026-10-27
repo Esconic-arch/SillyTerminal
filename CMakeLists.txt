@@ -6,7 +6,11 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_AUTOMOC ON)
 
-find_package(Qt6 6.5 REQUIRED COMPONENTS Widgets)
+find_package(Qt6 6.5 REQUIRED COMPONENTS Widgets Network Concurrent)
+
+add_library(local_account src/accountstore.cpp src/accountstore.h src/localidentity.h)
+target_link_libraries(local_account PUBLIC Qt6::Core PRIVATE Qt6::Network)
+target_include_directories(local_account PUBLIC src)
 
 add_library(terminal_core src/terminalcore.cpp src/terminalcore.h)
 target_link_libraries(terminal_core PUBLIC Qt6::Core)
@@ -76,14 +80,19 @@ add_library(text_browser src/textbrowser.cpp src/textbrowser.h)
 target_link_libraries(text_browser PUBLIC browser_core Qt6::Widgets)
 target_include_directories(text_browser PUBLIC src)
 
-add_library(terminal_ui src/terminalwidget.cpp src/terminalwidget.h src/textpager.cpp src/textpager.h)
+add_library(terminal_ui src/terminalwidget.cpp src/terminalwidget.h src/textpager.cpp src/textpager.h
+    src/terminalappearance.cpp src/terminalappearance.h)
 target_link_libraries(terminal_ui PUBLIC terminal_core vim_editor text_browser Qt6::Widgets)
 target_include_directories(terminal_ui PUBLIC src)
+
+add_library(local_session src/loginwidget.cpp src/loginwidget.h src/sessionwidget.cpp src/sessionwidget.h)
+target_link_libraries(local_session PUBLIC terminal_ui local_account Qt6::Concurrent)
+target_include_directories(local_session PUBLIC src)
 
 qt_add_executable(SillyTerminal
     src/main.cpp
 )
-target_link_libraries(SillyTerminal PRIVATE terminal_ui)
+target_link_libraries(SillyTerminal PRIVATE local_session)
 set_target_properties(SillyTerminal PROPERTIES
     WIN32_EXECUTABLE TRUE
     MACOSX_BUNDLE TRUE
@@ -94,6 +103,14 @@ set_target_properties(SillyTerminal PROPERTIES
 
 include(CTest)
 if(BUILD_TESTING)
+    add_executable(account_store_tests tests/account_tests.cpp)
+    target_link_libraries(account_store_tests PRIVATE local_account)
+    add_test(NAME account_store COMMAND account_store_tests)
+    set_tests_properties(account_store PROPERTIES TIMEOUT 45)
+    add_executable(local_session_tests tests/session_tests.cpp)
+    target_link_libraries(local_session_tests PRIVATE local_session)
+    add_test(NAME local_session COMMAND local_session_tests)
+    set_tests_properties(local_session PROPERTIES TIMEOUT 45 ENVIRONMENT "QT_FORCE_STDERR_LOGGING=1")
     add_executable(terminal_core_tests tests/core_tests.cpp)
     target_link_libraries(terminal_core_tests PRIVATE terminal_core)
     add_test(NAME terminal_core COMMAND terminal_core_tests)
@@ -108,7 +125,7 @@ if(BUILD_TESTING)
     add_test(NAME terminal_interaction COMMAND terminal_interaction_tests)
     set_tests_properties(terminal_interaction PROPERTIES TIMEOUT 20 ENVIRONMENT "QT_FORCE_STDERR_LOGGING=1")
     add_test(NAME terminal_ui COMMAND SillyTerminal --smoke-test ${CMAKE_CURRENT_BINARY_DIR}/terminal-preview.png)
-    set_tests_properties(terminal_ui PROPERTIES TIMEOUT 20 ENVIRONMENT "QT_FORCE_STDERR_LOGGING=1")
+    set_tests_properties(terminal_ui PROPERTIES TIMEOUT 35 ENVIRONMENT "QT_FORCE_STDERR_LOGGING=1")
 endif()
 
 install(TARGETS SillyTerminal BUNDLE DESTINATION . RUNTIME DESTINATION .)

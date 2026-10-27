@@ -28,6 +28,18 @@ dist\SillyTerminal\SillyTerminal.exe
 
 分发时需要复制整个 `dist\SillyTerminal` 文件夹，保留里面的 DLL 和 `platforms` 等子目录。玩家不需要安装 Qt 或编译器。
 
+## 登录与退出
+
+每次打开程序先进入文字控制台登录页。当前只有本地账户 **`guest`**，主机名为 **`silly`**。
+
+首次运行会显示 `Local account setup`：在 `New password:` 后输入密码并按回车，再在 `Retype new password:` 后重复一次。两次一致后进入终端。密码不能为空，至多 1024 个字符；支持中文，首尾空格也是密码的一部分。输入密码时不显示字符或星号。
+
+以后启动时，在 `silly login:` 后输入 `guest`，按回车，再输入自己设置的密码并回车。错误时显示 `Login incorrect`，稍候可以重试；`Ctrl+C` 可以取消当前登录输入并回到起点。账户文件读写失败时显示具体错误，不会自动覆盖账户或绕过登录。
+
+登录后显示实际记录的上次成功登录时间，首次登录省略这一行。输入 `exit` 或 `logout` 返回登录页；关闭窗口退出程序。文件、当前目录、命令历史和浏览器状态持续保留，退出登录只结束当前终端会话。字体设置在登录后通过 **Aa** 调整，再次进入登录页也沿用保存的字体与行距。
+
+账户保存在 `runtime/account.json`，采用随机盐和 PBKDF2-HMAC-SHA256（600000 次）保存密码校验数据，不保存明文密码，密码也不进入终端输出或命令历史。当前不提供多账户、权限控制或终端内修改密码。忘记密码时可关闭程序，将 `runtime/account.json` 改名为备份文件；下次启动重新设置密码，保留其余运行数据。这是游戏中的本地账户，与宿主系统账户独立。
+
 ## 怎么操作
 
 在提示符后输入命令，按回车执行。当前目录初始为 `/home/guest`，显示为 `~`。
@@ -67,6 +79,7 @@ guest@silly:~$ cat /var/log/boot.log
 | `echo 文字 > 文件` | 覆盖写入一行 UTF-8 文字 |
 | `echo 文字 >> 文件` | 在文件末尾追加一行文字 |
 | `whoami` | 查看当前用户名 |
+| `exit` / `logout` | 退出当前登录会话，返回登录页 |
 | `clear` | 清空屏幕，保留当前位置和历史命令 |
 
 文件操作示例：
@@ -102,7 +115,7 @@ grep -Fn "warning" < /var/log/boot.log >> matches.txt
 
 `|` 把前一条命令的标准输出送到后一条，支持连续多级管道。`>` 在命令执行前创建或清空目标文件，`>>` 追加且不会自动补入分隔换行，`<` 从文件提供输入。错误信息始终显示在终端，不进入管道或结果文件。与常用 Shell 一样，`cat file > file` 会先清空文件，读取失败的命令也可能留下空的重定向文件。`ls` 在管道和重定向中每行输出一个名称。
 
-首版管道支持 `cat`、`echo`、`grep`、`help`、`history`、`less`、`ls`、`pwd` 和 `whoami`。每条命令最多一个输入和一个输出重定向；交互式 `browser`、`edit`、`vim` 和 `clear` 不接受重定向，改变文件或当前目录的命令不放入管道。暂不支持 `&&`、`||`、`;`、后台任务、文件描述符重定向、通配符或变量展开。引号或反斜杠保护的 `|`、`<`、`>` 是普通文字。
+首版管道支持 `cat`、`echo`、`grep`、`help`、`history`、`less`、`ls`、`pwd` 和 `whoami`。每条命令最多一个输入和一个输出重定向；交互式 `browser`、`edit`、`vim`、`clear` 及会话命令 `exit`、`logout` 不接受重定向，改变文件或当前目录的命令不放入管道。暂不支持 `&&`、`||`、`;`、后台任务、文件描述符重定向、通配符或变量展开。引号或反斜杠保护的 `|`、`<`、`>` 是普通文字。
 
 `grep` 只处理 UTF-8 文本，`-r` 会搜索隐藏文件并跳过符号链接和目录联接。没有匹配时不显示错误；文件读取失败时会显示具体原因。它保留真实工具的退出状态约定：匹配为 0，无匹配为 1，读取或参数错误为 2。当前终端不提供 `$?` 展开。
 
@@ -214,9 +227,9 @@ browser linnotes.me/posts/nightwalk
 
 ## 运行数据与 Git
 
-在当前项目中运行时，本地电脑数据位于项目根目录的 `runtime/` 下：`runtime/world/` 保存玩家使用、修改后的文件，`runtime/session.json` 保存当前目录，`runtime/history.json` 保存命令历史，`runtime/browser.json` 保存收藏和浏览记录。整个目录已被 `.gitignore` 排除，普通的 `git add .` 不会将其加入提交。已有的 `build/` 和 `dist/` 也继续忽略。
+在当前项目中运行时，本地电脑数据位于项目根目录的 `runtime/` 下：`runtime/world/` 保存玩家使用、修改后的文件，`runtime/session.json` 保存当前目录，`runtime/history.json` 保存命令历史，`runtime/browser.json` 保存收藏和浏览记录，`runtime/account.json` 保存本地账户与上次成功登录时间。整个目录已被 `.gitignore` 排除，普通的 `git add .` 不会将其加入提交。已有的 `build/` 和 `dist/` 也继续忽略。
 
-初始内容位于 `assets/initial-world/`，纳入版本管理并在构建时嵌入程序。首次启动且 `runtime/world/` 不存在时，程序从初始内容建立一份运行副本；之后只读写运行副本。修改模板后需重新构建，模板更新只影响尚未建立世界的新副本。
+初始内容位于 `assets/initial-world/`，纳入版本管理并在构建时嵌入程序。登录成功且 `runtime/world/` 不存在时，程序从初始内容建立一份运行副本；之后只读写运行副本。修改模板后需重新构建，模板更新只影响尚未建立世界的新副本。
 
 把打包程序复制到项目之外时，会在程序所在目录创建 `runtime/`；macOS 则放在 `.app` 旁边。请放在可写文件夹中使用，更新时保留原有的 `runtime/`，备份电脑状态也只需复制这个目录。
 
@@ -225,6 +238,8 @@ browser linnotes.me/posts/nightwalk
 ## Windows 开发与构建
 
 需要 Qt 6.5 或更新版本的 **MinGW 桌面套件**、对应的 MinGW 编译器、CMake 和 Ninja。Qt 安装器可以安装这些工具。
+
+使用 Qt Widgets、Network 和 Concurrent 模块；Network 提供密码派生函数，登录不访问网络，Concurrent 用于后台密码校验。
 
 项目提供的脚本会在 `D:\Qt`、`C:\Qt` 和用户目录下的 `Qt` 中查找安装，只对构建进程调整环境变量，避免与 Anaconda 的 Qt 混用：
 
@@ -262,6 +277,11 @@ Windows 版本已经在当前电脑实际编译、测试。macOS 源码兼容性
 
 ```text
 src/main.cpp             窗口、配色与程序入口
+src/sessionwidget.*      登录页与已认证终端会话的切换
+src/loginwidget.*        文字登录、隐藏密码输入与后台验证
+src/accountstore.*       本地账户、密码派生与登录时间持久化
+src/localidentity.h      登录、终端和会话栏共用的身份信息
+src/terminalappearance.* 登录页与终端共用的默认字体和外观读取
 src/terminalwidget.*     连续终端界面、输入保护、历史与补全交互
 src/vimeditor.*          终端内的简易 Vim，模式、编辑与搜索
 src/textpager.*          只读分页器，滚动、搜索和返回终端
@@ -271,6 +291,8 @@ src/terminalcore.*       命令解析、受限文件读写和持久化
 assets/initial-world/   初始电脑内容，构建时嵌入程序
 assets/sites/pages.json 本地网站的页面内容与链接
 tests/core_tests.cpp     命令和文件系统行为测试
+tests/account_tests.cpp  密码校验、账户持久化、损坏与并发保护测试
+tests/session_tests.cpp  首次设置、登录重试、退出与数据保留测试
 tests/vim_tests.cpp      Vim 按键、保存、退出和持久化测试
 tests/terminal_interaction_tests.cpp  历史搜索、输入编辑、补全与分页交互测试
 tests/browser_tests.cpp  网站路由、链接、历史和浏览器交互测试

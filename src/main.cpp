@@ -1,10 +1,14 @@
 #include "terminalwidget.h"
+#include "sessionwidget.h"
+#include "loginwidget.h"
 
 #include <QApplication>
+#include <QEventLoop>
 #include <QFile>
 #include <QFileInfo>
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QLineEdit>
 #include <QPalette>
 #include <QPushButton>
 #include <QSettings>
@@ -81,19 +85,20 @@ int main(int argc, char *argv[]) {
 
     auto *icon = new QLabel(">_", header);
     icon->setStyleSheet("color: #a5a5b0; font-family: monospace; font-size: 13px; font-weight: 600;");
-    auto *title = new QLabel("guest@silly", header);
+    auto *title = new QLabel(header);
+    title->setObjectName("sessionIdentity");
     title->setStyleSheet("color: #dedee5; font-size: 12px; font-weight: 500;");
     auto *separator = new QLabel("/", header);
     separator->setStyleSheet("color: #686874; font-size: 12px;");
-    auto *session = new QLabel("Local", header);
-    session->setStyleSheet("color: #92939f; font-size: 12px;");
-    auto *path = new QLabel("~", header);
+    auto *sessionLabel = new QLabel("Local", header);
+    sessionLabel->setStyleSheet("color: #92939f; font-size: 12px;");
+    auto *path = new QLabel(header);
     path->setObjectName("sessionPath");
     path->setStyleSheet("color: #b2b2bd; font-size: 12px;");
     headerLayout->addWidget(icon);
     headerLayout->addWidget(title);
     headerLayout->addWidget(separator);
-    headerLayout->addWidget(session);
+    headerLayout->addWidget(sessionLabel);
     headerLayout->addStretch();
     headerLayout->addWidget(path);
     auto *appearance = new QPushButton("Aa", header);
@@ -110,18 +115,23 @@ int main(int argc, char *argv[]) {
     QTemporaryDir testWorld(smokeIndex >= 0
         ? QFileInfo(arguments.at(smokeIndex + 1)).absolutePath() + "/ui-world-XXXXXX" : QString());
     if (smokeIndex >= 0 && !testWorld.isValid()) return 6;
-    auto *terminal = new TerminalWidget(&window,
-        smokeIndex >= 0 ? testWorld.path() + "/world" : QString());
-    layout->addWidget(terminal, 1);
-    QObject::connect(appearance, &QPushButton::clicked, terminal, &TerminalWidget::showAppearanceSettings);
-    QObject::connect(terminal, &QTextEdit::textChanged, &window,
-        [&window, path, terminal] {
-            const QString directory = terminal->currentDirectory();
-            if (path->text() == directory) return;
-            path->setText(directory);
-            window.setWindowTitle(directory + QString::fromUtf8(" — SillyTerminal"));
-        });
-    terminal->setFocus();
+    const QString worldRoot = smokeIndex >= 0 ? testWorld.path() + "/world" : QString();
+    if (smokeIndex >= 0) {
+        const auto created = AccountStore(testWorld.path()).createAndLogin("isolated-preview-password");
+        if (!created.authenticated) return 7;
+    }
+    auto *session = new SessionWidget(worldRoot, &window);
+    layout->addWidget(session, 1);
+    QObject::connect(appearance, &QPushButton::clicked, session, &SessionWidget::showAppearanceSettings);
+    session->onStateChanged = [&window, title, path, appearance, session] {
+        title->setText(session->loggedIn() ? session->identity().label() : session->identity().hostName);
+        path->setText(session->loggedIn() ? session->currentDirectory() : "tty1");
+        appearance->setEnabled(session->loggedIn());
+        window.setWindowTitle((session->loggedIn() ? session->currentDirectory() : QStringLiteral("Login"))
+            + QString::fromUtf8(" — SillyTerminal"));
+    };
+    session->onStateChanged();
+    session->setFocus();
 
 #ifdef Q_OS_WIN
     styleNativeTitleBar(window);
@@ -133,9 +143,35 @@ int main(int argc, char *argv[]) {
         window.winId();
         window.ensurePolished();
         layout->activate();
-        QTimer::singleShot(100, &app, [&app, &window, terminal, imagePath] {
+        QTimer::singleShot(100, &app, [&app, &window, session, imagePath] {
+            if (!window.grab().save(imagePath + ".login.png")) { app.exit(8); return; }
+            auto *input = session->loginPage()->findChild<QLineEdit *>("loginInput");
+            input->setText("guest");
+            QMetaObject::invokeMethod(input, "returnPressed");
+            input->setText("isolated-preview-password");
+            QMetaObject::invokeMethod(input, "returnPressed");
+            QEventLoop loginLoop;
+            QTimer timeout, poll;
+            timeout.setSingleShot(true);
+            QObject::connect(&timeout, &QTimer::timeout, &loginLoop, &QEventLoop::quit);
+            QObject::connect(&poll, &QTimer::timeout, &loginLoop, [&] {
+                if (session->loggedIn()) loginLoop.quit();
+            });
+            timeout.start(12000);
+            poll.start(10);
+            loginLoop.exec();
+            auto *terminal = session->terminal();
+            if (!terminal) { app.exit(9); return; }
+            if (window.findChild<QLabel *>("sessionIdentity")->text() != session->identity().label()) {
+                app.exit(11); return;
+            }
             if (!terminal->smokeTest(imagePath + ".appearance.png")) { app.exit(3); return; }
             if (!window.grab().save(imagePath)) { app.exit(4); return; }
+            terminal->runCommand("logout");
+            if (session->loggedIn()
+                || window.findChild<QLabel *>("sessionIdentity")->text() != session->identity().hostName) {
+                app.exit(10); return;
+            }
             QFile result(imagePath + ".ok");
             if (!result.open(QIODevice::WriteOnly | QIODevice::Truncate)) { app.exit(5); return; }
             result.write("UI_CHECK_OK\n");

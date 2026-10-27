@@ -9,6 +9,8 @@
 - [Readline 历史搜索](https://www.gnu.org/software/bash/manual/html_node/Searching.html)与[剪切、恢复](https://www.gnu.org/s/bash/manual/html_node/Readline-Killing-Commands.html)：参考 Ctrl+R、Ctrl+U/K/W/Y 和连续剪切的操作习惯。搜索框使用 Qt 输入控件，以支持中文输入法；Esc 接受后继续编辑，Ctrl+G 还原原输入。
 - [GNU grep 手册](https://www.gnu.org/software/grep/manual/grep.html)：固定文字匹配明确要求 `-F`，行号从 1 开始，多个文件与递归搜索带文件名，使用 0/1/2 退出状态区分匹配、无匹配与错误。
 - [less 项目](https://greenwoodsoftware.com/less/)及[作者维护的源码和手册](https://github.com/gwsw/less)：参考分页、/ 与 ? 搜索、n/N 重复搜索、q 退出的使用方式。
+- [util-linux login 手册](https://man7.org/linux/man-pages/man1/login.1.html)：参考控制台用户名、隐藏密码输入、验证后进入 Shell、显示上次成功登录时间的流程。
+- [Qt QPasswordDigestor](https://doc.qt.io/qt-6/qpassworddigestor.html)与 [QLineEdit EchoMode](https://doc.qt.io/qt-6/qlineedit.html#EchoMode-enum)：使用 Qt 的 PBKDF2 实现和 `NoEcho` 输入，不自行实现密码派生算法。
 
 ## 当前范围
 
@@ -17,3 +19,11 @@
 命令历史与文件世界分开，位于 world 同级的 history.json，使用原子写入，最多 1000 条和 4 MiB，损坏的历史不自动覆盖。补全复用命令的词法规则，按光标位置识别命令、路径、管道与重定向，并对候选路径重新引用或转义。
 
 分页器保留阅读前的终端记录，内容只读，使用 Qt 正则表达式搜索，不实现完整 less 的选项、文件切换、外部命令或跟随文件增长。完整操作和限制见根目录 README。所有自动检查使用隔离的临时世界及设置目录。
+
+## 本地登录
+
+入口由 `SessionWidget` 管理：启动显示 `LoginWidget`，验证成功后才创建 `TerminalWidget` 和文件世界，退出登录时销毁当前终端并重新显示登录页。登录凭据不经过命令解析和历史记录。共享的 `LocalIdentity` 供登录、提示符、会话栏和 `whoami` 使用，目前只支持固定的 `guest@silly`。
+
+首次设置由两次隐藏密码输入确认；后续输入用户名和密码。`QLineEdit::NoEcho` 不显示密码字符或长度，后台任务使用 `QPasswordDigestor` 的 PBKDF2-HMAC-SHA256、600000 次迭代和 32 字节随机盐生成 32 字节校验值。错误用户名和密码均显示 `Login incorrect`，短暂等待由事件循环完成；文件错误单独报告。`account.json` 使用受限文件权限和原子写入，写入前加锁并重读，防止重复设置或并发丢失登录时间；损坏数据保留，不自动重建或允许进入终端。
+
+`exit` 和 `logout` 当前只支持无参数调用，不进入管道或接受重定向。重新登录保留既有文件、历史、浏览器状态和保存的当前目录。这里选择保留当前目录以衔接现有持久化行为；没有模拟完整 Unix 登录环境、PAM、进程、远程认证、多用户或文件权限。

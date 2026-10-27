@@ -2,6 +2,7 @@
 #include "vimeditor.h"
 #include "textbrowser.h"
 #include "textpager.h"
+#include "terminalappearance.h"
 
 #include <QApplication>
 #include <QClipboard>
@@ -19,6 +20,7 @@
 #include <QKeyEvent>
 #include <QLabel>
 #include <QLineEdit>
+#include <QLocale>
 #include <QMenu>
 #include <QMimeData>
 #include <QPushButton>
@@ -38,21 +40,11 @@ const QColor foreground("#dedee5");
 const QColor accent("#c0c5ed");
 const QColor muted("#92939f");
 const QColor errorColor("#f0a6a9");
-QFont defaultTerminalFont() {
-    QFont font = QFontDatabase::systemFont(QFontDatabase::FixedFont);
-    const auto families = QFontDatabase::families();
-    for (const QString &family : {QStringLiteral("SF Mono"), QStringLiteral("Menlo"),
-             QStringLiteral("Cascadia Mono"), QStringLiteral("Cascadia Code"),
-             QStringLiteral("Consolas"), QStringLiteral("DejaVu Sans Mono")}) {
-        if (families.contains(family)) { font.setFamily(family); break; }
-    }
-    font.setPointSize(12);
-    return font;
-}
 }
 
-TerminalWidget::TerminalWidget(QWidget *parent, const QString &worldRoot)
-    : QTextEdit(parent), m_core(worldRoot) {
+TerminalWidget::TerminalWidget(QWidget *parent, const QString &worldRoot,
+    const LocalIdentity &identity, const QDateTime &previousLogin)
+    : QTextEdit(parent), m_core(worldRoot, identity) {
     setAcceptRichText(false);
     setUndoRedoEnabled(false);
     setAcceptDrops(false);
@@ -68,17 +60,12 @@ TerminalWidget::TerminalWidget(QWidget *parent, const QString &worldRoot)
         "QScrollBar::handle:vertical:hover { background: #61616c; }"
         "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }"
         "QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { background: none; }");
-    QFont initialFont = defaultTerminalFont();
-    {
-        QSettings settings;
-        const QString family = settings.value("appearance/fontFamily").toString();
-        if (QFontDatabase::families().contains(family)) initialFont.setFamily(family);
-        initialFont.setPointSize(qBound(8, settings.value("appearance/fontSize", 12).toInt(), 32));
-        m_lineSpacing = qBound(100, settings.value("appearance/lineSpacing", 115).toInt(), 160);
+    const auto appearance = TerminalAppearance::load();
+    applyAppearance(appearance.font, appearance.lineSpacing, false);
+    if (previousLogin.isValid()) {
+        write("Last login: " + QLocale::c().toString(previousLogin.toLocalTime(), "ddd MMM d HH:mm:ss yyyy")
+            + " on tty1\n\n", muted);
     }
-    applyAppearance(initialFont, m_lineSpacing, false);
-    write("SillyTerminal 0.1.0\n", foreground);
-    write("Type help for commands, or cat notes.txt to begin.\n\n", muted);
     if (!m_core.initializationError().isEmpty()) write(m_core.initializationError() + '\n', errorColor);
     if (!m_core.historyWarning().isEmpty()) write(m_core.historyWarning() + '\n', errorColor);
     m_historyIndex = m_core.history().size();
@@ -107,7 +94,7 @@ void TerminalWidget::write(const QString &text, const QColor &color) {
 }
 
 void TerminalWidget::showPrompt() {
-    write("guest@silly", foreground);
+    write(m_core.identity().label(), foreground);
     write(":", muted);
     write(m_core.displayPath(), accent);
     write("$ ", muted);
@@ -151,6 +138,11 @@ void TerminalWidget::submit() {
     write("\n", foreground);
     const CommandResult result = m_core.execute(line);
     m_historyIndex = m_core.history().size();
+    if (result.endSession) {
+        setReadOnly(true);
+        if (onLogout) onLogout();
+        return;
+    }
     if (result.clear) { clearScreen(); return; }
     if (result.openBrowser) openBrowser(result.browserUrl);
     if (!result.editPath.isEmpty()) {
@@ -627,7 +619,7 @@ void TerminalWidget::showAppearanceSettings() {
     QObject::connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
     QObject::connect(buttons->button(QDialogButtonBox::RestoreDefaults), &QPushButton::clicked,
         &dialog, [fontBox, sizeBox, spacingBox] {
-            fontBox->setCurrentFont(defaultTerminalFont());
+            fontBox->setCurrentFont(TerminalAppearance::defaultFont());
             sizeBox->setValue(12);
             spacingBox->setValue(115);
         });

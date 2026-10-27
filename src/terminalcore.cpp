@@ -20,7 +20,7 @@
 #include <functional>
 
 namespace {
-const QStringList commands = {"browser", "cat", "cd", "clear", "cp", "echo", "edit", "grep", "help", "history", "less", "ls",
+const QStringList commands = {"browser", "cat", "cd", "clear", "cp", "echo", "edit", "exit", "grep", "help", "history", "less", "logout", "ls",
     "mkdir", "mv", "pwd", "rm", "touch", "vim", "whoami"};
 constexpr int historyLimit = 1000;
 CommandResult fail(const QString &message, int status = 1) {
@@ -67,7 +67,8 @@ QString TerminalCore::defaultWorldRoot() {
     return portable.filePath("runtime/world");
 }
 
-TerminalCore::TerminalCore(const QString &worldRoot) {
+TerminalCore::TerminalCore(const QString &worldRoot, const LocalIdentity &identity)
+    : m_identity(identity), m_currentPath(identity.homePath), m_previousPath(identity.homePath), m_home(identity.homePath) {
     static const bool resourcesReady = [] { Q_INIT_RESOURCE(initial_world); return true; }();
     Q_UNUSED(resourcesReady);
     m_worldRoot = QDir::cleanPath(QFileInfo(worldRoot.isEmpty() ? defaultWorldRoot() : worldRoot).absoluteFilePath());
@@ -354,7 +355,7 @@ QString TerminalCore::displayPath() const {
     return m_currentPath;
 }
 
-QString TerminalCore::prompt() const { return "guest@silly:" + displayPath() + "$ "; }
+QString TerminalCore::prompt() const { return m_identity.label() + ':' + displayPath() + "$ "; }
 
 CommandResult TerminalCore::readFile(const QString &path) const {
     QString error;
@@ -497,7 +498,8 @@ CommandResult TerminalCore::executePipeline(const QString &line) {
         const QString command = stage.words.first();
         if (stages.size() > 1 && commands.contains(command) && !textCommands.contains(command))
             return fail(command + ": this command cannot be used in a pipeline");
-        if ((command == "browser" || command == "edit" || command == "vim" || command == "clear")
+        if ((command == "browser" || command == "edit" || command == "vim" || command == "clear"
+            || command == "exit" || command == "logout")
             && !stage.redirects.isEmpty()) return fail(command + ": redirection is not supported for this interactive command");
         if (command == "history" && stage.words.contains("-c") && stages.size() > 1)
             return fail("history: -c cannot be used in a pipeline");
@@ -564,6 +566,12 @@ CommandResult TerminalCore::executePipeline(const QString &line) {
 CommandResult TerminalCore::executeCommand(const QString &command, QStringList args,
     const QString &input, bool hasInput, bool streamOutput) {
     if (!commands.contains(command)) return fail(command + ": command not found. Type 'help' for commands.", 127);
+    if (command == "exit" || command == "logout") {
+        if (!args.isEmpty()) return fail("usage: " + command);
+        CommandResult result;
+        result.endSession = true;
+        return result;
+    }
     if (command == "history") {
         if (args == QStringList{"-c"}) {
             m_history.clear();
@@ -633,6 +641,7 @@ CommandResult TerminalCore::executeCommand(const QString &command, QStringList a
             "  command < file      Read stdin from a UTF-8 file\n"
             "  command | command   Send stdout to the next text command\n"
             "  whoami               Show the current user\n"
+            "  exit / logout        End this login session\n"
             "  clear                Clear the screen\n"
             "  help                 Show this help\n\n"
             "PATHS   / absolute   .. parent   ~ home   cd - previous\n"
@@ -644,7 +653,7 @@ CommandResult TerminalCore::executeCommand(const QString &command, QStringList a
     if (command == "clear" || command == "pwd" || command == "whoami") {
         if (!args.isEmpty()) return fail("usage: " + command);
         if (command == "clear") return {{}, false, true};
-        return {command == "pwd" ? m_currentPath : QStringLiteral("guest")};
+        return {command == "pwd" ? m_currentPath : m_identity.userName};
     }
     if (command == "cp" || command == "mv") return transfer(command, args);
     if (command == "cd") {

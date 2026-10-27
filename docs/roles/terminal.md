@@ -17,6 +17,7 @@
 - `src/terminalwidget.*`：终端界面、输入和编辑器集成。
 - `src/vimeditor.*`：简易 Vim。
 - `src/main.cpp`：程序入口和主窗口。
+- `src/sessionwidget.*`、`src/loginwidget.*`、`src/accountstore.*`：本地登录、会话切换与账户持久化。
 - `assets/initial-world/`：初始电脑内容。
 - `tests/core_tests.cpp`、`tests/vim_tests.cpp`：相关检查。
 

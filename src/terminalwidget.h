@@ -1,7 +1,9 @@
 #pragma once
 
 #include "terminalcore.h"
+#include <QDateTime>
 #include <QTextEdit>
+#include <functional>
 
 class QInputMethodEvent;
 class QKeyEvent;
@@ -14,11 +16,13 @@ class TextPager;
 
 class TerminalWidget : public QTextEdit {
 public:
-    explicit TerminalWidget(QWidget *parent = nullptr, const QString &worldRoot = {});
+    explicit TerminalWidget(QWidget *parent = nullptr, const QString &worldRoot = {},
+        const LocalIdentity &identity = {}, const QDateTime &previousLogin = {});
     void runCommand(const QString &command);
     void showAppearanceSettings();
     bool smokeTest(const QString &appearancePreviewPath = {});
     QString currentDirectory() const { return m_core.displayPath(); }
+    std::function<void()> onLogout;
 
 protected:
     void keyPressEvent(QKeyEvent *event) override;

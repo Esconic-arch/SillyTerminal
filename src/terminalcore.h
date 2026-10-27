@@ -1,5 +1,6 @@
 #pragma once
 
+#include "localidentity.h"
 #include <QList>
 #include <QString>
 #include <QStringList>
@@ -19,6 +20,7 @@ struct CommandResult {
     int exitCode = 0;
     bool openPager = false;
     QString pagerTitle;
+    bool endSession = false;
 };
 
 struct Completion {
@@ -29,7 +31,7 @@ struct Completion {
 
 class TerminalCore {
 public:
-    explicit TerminalCore(const QString &worldRoot = {});
+    explicit TerminalCore(const QString &worldRoot = {}, const LocalIdentity &identity = {});
     CommandResult execute(const QString &line);
     Completion complete(const QString &line, int cursor = -1) const;
     const QStringList &history() const { return m_history; }
@@ -39,20 +41,22 @@ public:
     QString prompt() const;
     QString worldRoot() const { return m_worldRoot; }
     QString initializationError() const { return m_initializationError; }
+    LocalIdentity identity() const { return m_identity; }
     CommandResult saveFile(const QString &path, const QString &content);
     static QString defaultWorldRoot();
 
 private:
     struct Token { QString text; bool control = false; int start = 0; int end = 0; };
+    LocalIdentity m_identity;
     QString m_worldRoot;
     QString m_statePath;
     QString m_initializationError;
     QStringList m_history;
     QString m_historyWarning;
     bool m_historyWritable = true;
-    QString m_currentPath = QStringLiteral("/home/guest");
-    QString m_previousPath = QStringLiteral("/home/guest");
-    const QString m_home = QStringLiteral("/home/guest");
+    QString m_currentPath;
+    QString m_previousPath;
+    const QString m_home;
 
     QString resolve(const QString &path) const;
     QStringList children(const QString &directory, bool hidden) const;
