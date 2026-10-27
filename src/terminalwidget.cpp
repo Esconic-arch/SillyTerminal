@@ -26,7 +26,6 @@
 #include <QPushButton>
 #include <QScrollBar>
 #include <QSettings>
-#include <QShortcut>
 #include <QSpinBox>
 #include <QTextBlock>
 #include <QTextBlockFormat>
@@ -145,10 +144,7 @@ void TerminalWidget::submit() {
     }
     if (result.clear) { clearScreen(); return; }
     if (result.openBrowser) openBrowser(result.browserUrl);
-    if (!result.editPath.isEmpty()) {
-        if (result.useVim) openVim(result.editPath, result.editContent);
-        else openEditor(result.editPath, result.editContent);
-    }
+    if (!result.editPath.isEmpty()) openVim(result.editPath, result.editContent);
     if (result.openPager) openPager(result.pagerTitle, result.output);
     else if (!result.output.isEmpty()) write(result.output, foreground);
     if (!result.diagnostics.isEmpty()) write(result.diagnostics, errorColor);
@@ -487,63 +483,6 @@ void TerminalWidget::openVim(const QString &path, const QString &content) {
     setFocus();
 }
 
-void TerminalWidget::openEditor(const QString &path, const QString &content) {
-    QDialog dialog(window());
-    dialog.setWindowTitle("Edit " + path);
-    dialog.resize(760, 540);
-    dialog.setMinimumSize(440, 300);
-    dialog.setStyleSheet(
-        "QDialog { background: #25262a; } QLabel { color: #b2b2bd; }"
-        "QPushButton { background: #36363f; color: #dedee5; border: 1px solid #4b4b57; border-radius: 5px; padding: 7px 16px; }"
-        "QPushButton:hover { background: #454550; }"
-        "QPushButton:default { background: #c0c5ed; color: #202129; }");
-    auto *layout = new QVBoxLayout(&dialog);
-    layout->setContentsMargins(20, 18, 20, 18);
-    layout->setSpacing(14);
-    auto *title = new QLabel(path, &dialog);
-    title->setTextFormat(Qt::PlainText);
-    title->setWordWrap(true);
-    layout->addWidget(title);
-    auto *editor = new QTextEdit(&dialog);
-    editor->setObjectName("fileEditor");
-    editor->setAcceptRichText(false);
-    editor->setFont(font());
-    editor->document()->setDefaultFont(font());
-    editor->document()->setDocumentMargin(16);
-    editor->setStyleSheet("QTextEdit { background: #1c1c1f; color: #dedee5; border: 1px solid #3c3c46; border-radius: 5px; selection-background-color: #45465b; }");
-    editor->setPlainText(content);
-    QTextCursor all(editor->document());
-    all.select(QTextCursor::Document);
-    QTextBlockFormat format;
-    format.setLineHeight(m_lineSpacing, QTextBlockFormat::ProportionalHeight);
-    all.mergeBlockFormat(format);
-    layout->addWidget(editor, 1);
-    auto *status = new QLabel("UTF-8   |   Ctrl+S / Command+S to save   |   Esc to cancel", &dialog);
-    status->setTextFormat(Qt::PlainText);
-    status->setWordWrap(true);
-    layout->addWidget(status);
-    auto *buttons = new QDialogButtonBox(QDialogButtonBox::Save | QDialogButtonBox::Cancel, &dialog);
-    buttons->setObjectName("editorButtons");
-    layout->addWidget(buttons);
-    const auto save = [this, &dialog, path, editor, status] {
-        const auto result = m_core.saveFile(path, editor->toPlainText());
-        if (result.error) {
-            status->setStyleSheet("color: #f0a6a9;");
-            status->setText(result.text);
-            return;
-        }
-        dialog.accept();
-    };
-    QObject::connect(buttons, &QDialogButtonBox::accepted, &dialog, save);
-    QObject::connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
-    auto *saveShortcut = new QShortcut(QKeySequence::Save, &dialog);
-    QObject::connect(saveShortcut, &QShortcut::activated, &dialog, save);
-    editor->setFocus();
-    if (dialog.exec() == QDialog::Accepted) write("Saved " + path + '\n', muted);
-    else write("Edit cancelled.\n", muted);
-    setFocus();
-}
-
 void TerminalWidget::showAppearanceSettings() {
     const QFont originalFont = font();
     const int originalSpacing = m_lineSpacing;
@@ -737,30 +676,6 @@ bool TerminalWidget::smokeTest(const QString &appearancePreviewPath) {
         || toPlainText() != savedTranscript) { qWarning("UI smoke check failed at line %d", __LINE__); return false; }
     applyAppearance(savedFont, savedSpacing, true);
     setInput("");
-    bool editorSaved = false;
-    QTimer::singleShot(100, this, [&editorSaved, appearancePreviewPath] {
-        auto *dialog = qobject_cast<QDialog *>(QApplication::activeModalWidget());
-        if (!dialog) return;
-        auto *editor = dialog->findChild<QTextEdit *>("fileEditor");
-        auto *buttons = dialog->findChild<QDialogButtonBox *>("editorButtons");
-        if (editor && buttons) {
-            editor->setPlainText(QString::fromUtf8("Saved from the editor.\n你好，终端。\n"));
-            editorSaved = true;
-            if (!appearancePreviewPath.isEmpty())
-                editorSaved = dialog->grab().save(appearancePreviewPath + ".editor.png");
-            buttons->button(QDialogButtonBox::Save)->click();
-        } else dialog->reject();
-    });
-    runCommand("edit editor-check.txt");
-    if (!editorSaved || m_core.execute("cat editor-check.txt").text
-        != QString::fromUtf8("Saved from the editor.\n你好，终端。\n")) { qWarning("UI smoke check failed at line %d", __LINE__); return false; }
-    QTimer::singleShot(100, this, [] {
-        auto *dialog = qobject_cast<QDialog *>(QApplication::activeModalWidget());
-        if (dialog) dialog->reject();
-    });
-    runCommand("edit cancelled.txt");
-    if (!m_core.execute("cat cancelled.txt").error) { qWarning("UI smoke check failed at line %d", __LINE__); return false; }
-    runCommand("cat editor-check.txt");
     bool vimChecked = false;
     QTimer::singleShot(100, this, [this, &vimChecked, appearancePreviewPath] {
         auto *buffer = m_vim ? m_vim->findChild<QTextEdit *>("vimBuffer") : nullptr;

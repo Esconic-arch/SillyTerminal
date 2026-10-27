@@ -11,7 +11,6 @@ struct CommandResult {
     bool clear = false;
     QString editPath;
     QString editContent;
-    bool useVim = false;
     bool openBrowser = false;
     QString browserUrl;
     // Exact stream contents; text remains the command's human-readable result.
