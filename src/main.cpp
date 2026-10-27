@@ -1,6 +1,7 @@
 #include "terminalwidget.h"
 #include "sessionwidget.h"
 #include "loginwidget.h"
+#include "aisettingsdialog.h"
 
 #include <QApplication>
 #include <QEventLoop>
@@ -12,6 +13,7 @@
 #include <QPalette>
 #include <QPushButton>
 #include <QSettings>
+#include <QSslSocket>
 #include <QTemporaryDir>
 #include <QTimer>
 #include <QVBoxLayout>
@@ -101,6 +103,15 @@ int main(int argc, char *argv[]) {
     headerLayout->addWidget(sessionLabel);
     headerLayout->addStretch();
     headerLayout->addWidget(path);
+    auto *services = new QPushButton("AI", header);
+    services->setObjectName("aiServicesButton");
+    services->setToolTip("Configure DeepSeek and ComfyUI services");
+    services->setCursor(Qt::PointingHandCursor);
+    services->setFixedSize(32, 26);
+    services->setStyleSheet(
+        "QPushButton { color: #b2b2bd; font-size: 12px; background: transparent; border: none; border-radius: 4px; }"
+        "QPushButton:hover { color: #dedee5; background: #393940; }");
+    headerLayout->addWidget(services);
     auto *appearance = new QPushButton("Aa", header);
     appearance->setToolTip("Font & spacing (Ctrl+, / Command+,)");
     appearance->setCursor(Qt::PointingHandCursor);
@@ -116,6 +127,13 @@ int main(int argc, char *argv[]) {
         ? QFileInfo(arguments.at(smokeIndex + 1)).absolutePath() + "/ui-world-XXXXXX" : QString());
     if (smokeIndex >= 0 && !testWorld.isValid()) return 6;
     const QString worldRoot = smokeIndex >= 0 ? testWorld.path() + "/world" : QString();
+    // The smoke process opens AI settings against an empty, isolated config.
+    // It must never read the user's service config or existing credentials.
+    const AiSettingsStore aiSettings(smokeIndex >= 0 ? testWorld.path() + "/ai-services.json" : QString());
+    QObject::connect(services, &QPushButton::clicked, &window, [&window, aiSettings] {
+        AiSettingsDialog dialog(&window, aiSettings);
+        dialog.exec();
+    });
     if (smokeIndex >= 0) {
         const auto created = AccountStore(testWorld.path()).createAndLogin("isolated-preview-password");
         if (!created.authenticated) return 7;
@@ -143,7 +161,20 @@ int main(int argc, char *argv[]) {
         window.winId();
         window.ensurePolished();
         layout->activate();
-        QTimer::singleShot(100, &app, [&app, &window, session, imagePath] {
+        QTimer::singleShot(100, &app, [&app, &window, session, services, aiSettings, imagePath] {
+            if (!QSslSocket::supportsSsl()) { qWarning("UI smoke: TLS backend unavailable"); app.exit(12); return; }
+            bool aiDialogChecked = false;
+            QTimer::singleShot(100, &window, [&aiDialogChecked, imagePath] {
+                auto *dialog = qobject_cast<QDialog *>(QApplication::activeModalWidget());
+                if (!dialog || dialog->objectName() != "aiSettingsDialog") return;
+                auto *deepSeekKey = dialog->findChild<QLineEdit *>("deepSeekKey");
+                auto *comfyUiKey = dialog->findChild<QLineEdit *>("comfyUiKey");
+                aiDialogChecked = deepSeekKey && comfyUiKey && deepSeekKey->text().isEmpty()
+                    && comfyUiKey->text().isEmpty() && dialog->grab().save(imagePath + ".ai.png");
+                dialog->reject();
+            });
+            services->click();
+            if (!aiDialogChecked || QFileInfo::exists(aiSettings.filePath())) { app.exit(13); return; }
             if (!window.grab().save(imagePath + ".login.png")) { app.exit(8); return; }
             auto *input = session->loginPage()->findChild<QLineEdit *>("loginInput");
             input->setText("guest");

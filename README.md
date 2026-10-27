@@ -42,6 +42,16 @@ dist\SillyTerminal\SillyTerminal.exe
 
 ## 怎么操作
 
+### AI 服务配置
+
+点击窗口右上角 **AI**，可以配置 DeepSeek 的 API 根地址、密钥和模型，以及自托管 ComfyUI 的服务器地址和可选 Bearer token。登录前也能打开设置。
+
+DeepSeek 默认地址为 `https://api.deepseek.com`；**Test connection / load models** 检查 API 访问并加载模型列表。ComfyUI 默认地址为 `http://127.0.0.1:8188`；**Test connection** 检查服务器是否返回系统信息。这些检查不生成文字或图片。检查当前草稿后，点击 **Save** 保存，**Cancel** 放弃修改。
+
+服务配置属于宿主应用的用户设置。密钥使用 Windows Credential Manager 或 macOS Keychain 保存，和游戏内账户、文件与命令历史分开。当前已完成配置和连接检查，摄像头拍照及组合生成流程仍待实现。说明和验证范围见 [AI 服务配置](docs/ai-service-configuration.md)。
+
+### 终端命令
+
 在提示符后输入命令，按回车执行。当前目录初始为 `/home/guest`，显示为 `~`。
 
 ```text
@@ -292,6 +302,9 @@ src/main.cpp             窗口、配色与程序入口
 src/sessionwidget.*      登录页与已认证终端会话的切换
 src/loginwidget.*        文字登录、隐藏密码输入与后台验证
 src/accountstore.*       本地账户、密码派生与登录时间持久化
+src/aiservices.*         AI 服务配置、凭据引用与异步连接检查
+src/aicredentials.cpp    Windows Credential Manager / macOS Keychain 适配
+src/aisettingsdialog.*   AI 服务配置界面
 src/localidentity.h      登录、终端和会话栏共用的身份信息
 src/terminalappearance.* 登录页与终端共用的默认字体和外观读取
 src/terminalwidget.*     连续终端界面、输入保护、历史与补全交互
@@ -305,6 +318,7 @@ assets/initial-world/   初始电脑内容，构建时嵌入程序
 assets/sites/pages.json 本地网站的页面内容与链接
 tests/core_tests.cpp     命令和文件系统行为测试
 tests/account_tests.cpp  密码校验、账户持久化、损坏与并发保护测试
+tests/ai_services_tests.cpp  AI 配置、模拟连接、超时、取消与凭据隔离测试
 tests/session_tests.cpp  首次设置、登录重试、退出与数据保留测试
 tests/mc_tests.cpp       mc 操作、文件持久化与终端/Vim/分页器衔接测试
 tests/vim_tests.cpp      Vim 按键、保存、退出和持久化测试
