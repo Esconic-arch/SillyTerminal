@@ -12,9 +12,12 @@ add_library(local_account src/accountstore.cpp src/accountstore.h src/localident
 target_link_libraries(local_account PUBLIC Qt6::Core PRIVATE Qt6::Network)
 target_include_directories(local_account PUBLIC src)
 
-add_library(ai_services src/aiservices.cpp src/aiservices.h src/aicredentials.cpp)
+add_library(ai_services src/aiservices.cpp src/aiservices.h src/aicredentials.cpp src/aicameraprofile.cpp src/aicameraprofile.h)
 target_link_libraries(ai_services PUBLIC Qt6::Network)
 target_include_directories(ai_services PUBLIC src)
+qt_add_resources(ai_services ai_profile_example
+    PREFIX "/ai" BASE "${CMAKE_CURRENT_SOURCE_DIR}/assets/ai"
+    FILES assets/ai/camera-profile.example.json)
 if(WIN32)
     target_link_libraries(ai_services PRIVATE advapi32)
 elseif(APPLE)
@@ -100,6 +103,9 @@ target_include_directories(mc_file_manager PUBLIC src)
 add_library(camera_core src/cameracore.cpp src/cameracore.h src/cameraimageprovider.h)
 target_link_libraries(camera_core PUBLIC Qt6::Core PRIVATE Qt6::Network)
 target_include_directories(camera_core PUBLIC src)
+add_library(ai_camera_provider src/aicameraimageprovider.cpp src/aicameraimageprovider.h)
+target_link_libraries(ai_camera_provider PUBLIC ai_services camera_core Qt6::Gui)
+target_include_directories(ai_camera_provider PUBLIC src)
 qt_add_resources(camera_core initial_network
     PREFIX "/initial-network"
     BASE "${CMAKE_CURRENT_SOURCE_DIR}/assets/initial-network"
@@ -115,7 +121,7 @@ target_link_libraries(terminal_ui PUBLIC terminal_core vim_editor text_browser m
 target_include_directories(terminal_ui PUBLIC src)
 
 add_library(local_session src/loginwidget.cpp src/loginwidget.h src/sessionwidget.cpp src/sessionwidget.h)
-target_link_libraries(local_session PUBLIC terminal_ui local_account Qt6::Concurrent)
+target_link_libraries(local_session PUBLIC terminal_ui local_account Qt6::Concurrent PRIVATE ai_camera_provider)
 target_include_directories(local_session PUBLIC src)
 
 qt_add_executable(SillyTerminal
@@ -132,6 +138,10 @@ set_target_properties(SillyTerminal PROPERTIES
 
 include(CTest)
 if(BUILD_TESTING)
+    add_executable(ai_camera_tests tests/ai_camera_tests.cpp)
+    target_link_libraries(ai_camera_tests PRIVATE ai_camera_provider)
+    add_test(NAME ai_camera COMMAND ai_camera_tests)
+    set_tests_properties(ai_camera PROPERTIES TIMEOUT 40 ENVIRONMENT "QT_FORCE_STDERR_LOGGING=1")
     add_executable(camera_tests tests/camera_tests.cpp)
     target_link_libraries(camera_tests PRIVATE terminal_ui)
     add_test(NAME camera COMMAND camera_tests)

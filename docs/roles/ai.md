@@ -58,11 +58,11 @@
 
 - `AGENTS.md`、`README.md`、`docs/project-vision.md`、`docs/parallel-development.md`：共同原则、已有功能与协作方式。
 - `docs/roles/software.md`、`docs/roles/network.md`、`docs/roles/websites.md`、`docs/roles/browser.md`：相关方向的边界。
-- [拍照生成接口草案](../ai-camera-interface.md)与[固定摄像头设计](../fixed-camera-design.md)：已整合的跨方向建议，尚未实现或联调。
+- [拍照生成接口草案](../ai-camera-interface.md)、[摄像头实现](../camera-implementation.md)与[生成适配](../ai-camera-generation.md)：跨方向接口、已实现范围和待完成的真实服务验证。
 - `src/aiservices.*`、`src/aicredentials.cpp`、`src/aisettingsdialog.*`、`tests/ai_services_tests.cpp`：当前配置、凭据和连接检查实现；完成通知使用 `onFinished` 回调。
 - 必要时少量只读查看 `src/`、`CMakeLists.txt`、`assets/` 与 `tests/`，确认实际现状；无需为了初始化穷尽阅读源码。
 
-当前已有本地文件系统、命令、编辑器、浏览器和单账户登录。AI 方向已提供 DeepSeek 与自托管 ComfyUI 的服务配置、系统凭据保存和只读连接检查，见 [服务配置说明](../ai-service-configuration.md)；文本生成、图片工作流和组合任务尚未接入。初始化时以实际仓库为准，区分已有实现、已确认方向和待讨论方案。
+当前已有本地文件系统、命令、编辑器、浏览器和单账户登录。AI方向已提供服务配置、系统凭据保存和只读连接检查，并实现摄像头专用的DeepSeek描述、ComfyUI工作流填参、异步任务、恢复与图片保存。见[服务配置](../ai-service-configuration.md)和[生成适配](../ai-camera-generation.md)。真实服务及图像一致性仍待配置后验证；通用聊天、SillyTavern预设兼容和参考素材生成适配尚未实现。初始化时以实际仓库为准区分状态。
 
 ## 初始化交付
 

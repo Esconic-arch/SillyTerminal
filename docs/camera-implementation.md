@@ -2,7 +2,7 @@
 
 ## 当前范围
 
-摄像头侧已实现设备认证、状态读取、按需拍摄、场景冻结、拍摄记录持久化、任务查询和重试，以及图片资源预览与导出。真实 DeepSeek / ComfyUI 生成适配尚未实现；默认服务明确返回不可用。自动测试使用独立模拟服务与合成图片。
+摄像头侧已实现设备认证、状态读取、按需拍摄、场景冻结、拍摄记录持久化、任务查询和重试，以及图片资源预览与导出。应用会注入AI方向的DeepSeek / ComfyUI生成适配器，配置及真实联调范围见[生成适配说明](ai-camera-generation.md)。独立构造的摄像头仍可使用不可用默认实现或测试注入服务；自动测试使用独立模拟服务与合成图片。
 
 `camera [http://address]` 是本项目的快照客户端程序，入口位于终端。固定机位设备通过虚构 HTTP 服务模型访问，不建立宿主网络连接，不宣称实现完整 HTTP、ONVIF 或设备系统 Shell。交互参考网络摄像头的账户认证、设备信息和单张 JPEG 抓拍用途。
 
@@ -41,7 +41,7 @@
 
 ## 图像接口 v1
 
-摄像头侧的具体边界位于 `src/cameraimageprovider.h`。它是供 AI 方向实现的适配入口，尚不意味着真实生成服务已完成。`CameraDialog` 和 `CameraCore` 均允许注入 `std::shared_ptr<CameraImageProvider>`；程序默认使用不可用实现。
+摄像头侧的具体边界位于 `src/cameraimageprovider.h`。`CameraDialog` 和 `CameraCore` 均允许注入 `std::shared_ptr<CameraImageProvider>`；应用通过会话对象注入 `AiCameraImageProvider`，独立构造而未注入时使用不可用实现。真实服务效果需要以用户配置后的联调结果确认。
 
 所有方法应迅速返回本地状态。真实适配器在其内部执行异步网络请求、保存任务与图片资源；`CameraCore` 和 UI 不读取 AI 密钥、组装 DeepSeek 请求或理解 ComfyUI 工作流。
 

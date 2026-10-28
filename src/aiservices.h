@@ -16,6 +16,7 @@ struct AiServiceSettings {
     QString deepSeekKeyRef;
     QString comfyUiUrl = QStringLiteral("http://127.0.0.1:8188");
     QString comfyUiKeyRef;
+    QString cameraProfilePath;
     int timeoutSeconds = 15;
 };
 

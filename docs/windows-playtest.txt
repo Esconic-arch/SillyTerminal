@@ -1,0 +1,33 @@
+SillyTerminal 试玩版（Windows 64 位）
+
+开始试玩
+1. 先把整个 ZIP 解压到自己的可写文件夹，例如桌面或“文档”。
+2. 打开 SillyTerminal 文件夹，双击 SillyTerminal.exe。
+3. 第一次运行时，为游戏内的 guest 账户设置密码并重复输入一次。
+   密码输入时不显示字符或星号；以后启动时使用 guest 和自己设置的密码登录。
+
+文件夹中的 DLL 和子目录属于运行依赖，请与程序一起保留。
+无需安装 Qt、CMake、编译器或开发环境。不要直接在压缩包中运行程序。
+这个包用于 Windows 64 位；macOS 需要另外编译的版本。
+
+可以试什么
+输入 help 查看命令，输入 browser 打开文字浏览器，输入 mc 打开文件管理器。
+ls、cd、cat、mkdir、touch、cp、mv、rm、grep、less 和 vim 等功能可以离线使用。
+使用 exit 或 logout 返回登录页，关闭窗口退出。
+
+摄像头
+输入 camera 192.168.50.23 打开虚构摄像头。
+设备账户为 viewer，密码为 teacup-27。这是游戏中的设备账户。
+实际生成照片需要在右上角 AI 中配置自己的 DeepSeek、已启动的 ComfyUI，
+以及适配该 ComfyUI 的 Camera generation profile。试玩包不包含 API 密钥、
+图像模型或 ComfyUI 服务。其他终端与网页功能不依赖这些服务。
+
+数据保存
+在开发项目之外运行本包时，程序会在 SillyTerminal.exe 旁边建立 runtime 文件夹。
+账户、世界文件、命令历史、收藏、摄像头记录与生成图片会持续保存在这里。
+runtime/world 中的文件是真实文件，也可以关闭游戏后用系统终端或编辑器操作。
+备份或迁移进度时，请先退出程序，再复制整个 runtime 文件夹。
+更新程序时建议解压到新文件夹，再复制旧的 runtime；保留一份备份。
+AI 服务设置及系统凭据独立保存在当前 Windows 用户下，不随 runtime 迁移。
+
+反馈问题时，请提供试玩包文件名、操作步骤、看到的结果和预期结果。

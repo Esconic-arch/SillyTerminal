@@ -2,7 +2,7 @@
 
 ## 状态与用途
 
-本文在整合时汇总“虚构网络与目标系统”和“AI 接入与生成系统”两边现有的摄像头及接口讨论。摄像头侧现已实现设备、冻结快照、记录及可注入的图像任务接口；具体 v1 字段、方法与恢复规则见 [实现与交接](camera-implementation.md) 和 `src/cameraimageprovider.h`。真实生成适配尚待 AI 方向实现与双方联调。服务配置、凭据保存和只读连接检查已由 AI 方向实现，见 [AI 服务配置](ai-service-configuration.md)，尚未提交真实生成任务。
+本文汇总“虚构网络与目标系统”和“AI接入与生成系统”的摄像头接口讨论。摄像头侧已实现设备、冻结快照、记录及可注入图像任务接口，具体v1约定见[实现与交接](camera-implementation.md)和 `src/cameraimageprovider.h`。AI方向已实现DeepSeek → ComfyUI适配器及模拟服务联调，见[摄像头生成适配](ai-camera-generation.md)；用户真实服务、模型与工作流的画面效果仍待配置后验证。下文保留最初设计依据，实际能力以实现说明为准。
 
 用户已确认固定机位、玩家明确拍照才生成，以及未来接入 DeepSeek 与 ComfyUI。拟采用的链路为：摄像头验证访问条件并冻结画面事实，AI 方向通过 DeepSeek 整理提示词，再用 ComfyUI 生成并保存照片。设备细节见 [固定摄像头设计](fixed-camera-design.md)，共同原则见 [项目方向](project-vision.md)。
 

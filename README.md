@@ -28,6 +28,20 @@ dist\SillyTerminal\SillyTerminal.exe
 
 分发时需要复制整个 `dist\SillyTerminal` 文件夹，保留里面的 DLL 和 `platforms` 等子目录。玩家不需要安装 Qt 或编译器。
 
+### 制作 Windows 试玩包
+
+在项目根目录运行：
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\build.ps1 -QtRoot D:\Qt\6.10.2\mingw_64 -MinGwRoot D:\Qt\Tools\mingw1310_64 -Package
+```
+
+脚本完成构建和全部测试后，使用 `windeployqt` 将程序和运行依赖部署到新的干净目录，加入试玩说明，生成 `dist\SillyTerminal-Windows-x64-日期时间.zip` 和 SHA256 校验文件。它会重新解压 ZIP，并在移除开发套件环境变量后检查启动、界面和 TLS 后端。该检查使用独立临时账户与设置，不调用真实 AI 服务。
+
+直接把 ZIP 发给试玩者即可。对方完整解压到可写文件夹，打开其中的 `SillyTerminal`，双击 `SillyTerminal.exe`，首次设置自己的游戏内密码。不要只发 EXE，也不要将整个项目或自己使用过的 `runtime/` 一起压缩；脚本从构建后的 EXE 重新部署，不复制这些个人数据或宿主 AI 设置。包内附有 [试玩说明](docs/windows-playtest.txt)。
+
+Windows ZIP 供 64 位 Windows 使用；Mac 需要在 macOS 上单独构建并用 `macdeployqt` 部署 `.app`，不能运行这个 EXE。部署工具的行为参考 [Qt Windows 部署](https://doc.qt.io/qt-6/windows-deployment.html)和 [Qt macOS 部署](https://doc.qt.io/qt-6/macos-deployment.html)。
+
 ## 登录与退出
 
 每次打开程序先进入文字控制台登录页。当前只有本地账户 **`guest`**，主机名为 **`silly`**。
@@ -48,7 +62,7 @@ dist\SillyTerminal\SillyTerminal.exe
 
 DeepSeek 默认地址为 `https://api.deepseek.com`；**Test connection / load models** 检查 API 访问并加载模型列表。ComfyUI 默认地址为 `http://127.0.0.1:8188`；**Test connection** 检查服务器是否返回系统信息。这些检查不生成文字或图片。检查当前草稿后，点击 **Save** 保存，**Cancel** 放弃修改。
 
-服务配置属于宿主应用的用户设置。密钥使用 Windows Credential Manager 或 macOS Keychain 保存，和游戏内账户、文件与命令历史分开。当前已完成配置和连接检查；摄像头客户端与拍摄记录已实现，真实的组合生成适配仍待 AI 方向提供。说明和验证范围见 [AI 服务配置](docs/ai-service-configuration.md)。
+服务配置属于宿主应用的用户设置。密钥使用 Windows Credential Manager 或 macOS Keychain 保存，和游戏内账户、文件与命令历史分开。摄像头已接入DeepSeek → ComfyUI生成适配器；还需在 **Camera generation** 中选择与本机ComfyUI匹配的工作流配置。可导出示例，替换checkpoint与API工作流并填写输入绑定。说明见[AI服务配置](docs/ai-service-configuration.md)和[摄像头生成配置](docs/ai-camera-generation.md)。
 
 ### 固定家庭摄像头
 
@@ -56,7 +70,7 @@ DeepSeek 默认地址为 `https://api.deepseek.com`；**Test connection / load m
 
 摄像头固定视角，无转向或实时视频。打开客户端、登录、查看历史都不触发新的拍照。界面提供拍摄时刻、任务状态、重试、图片预览与 **Save image...**；保存目的地是虚构电脑中的真实文件路径，已有文件不会被覆盖。普通用户 `monitor` / `status-only` 仅能查看设备状态，不能拍照。
 
-**当前真实图片生成适配尚未交付。** 点击拍照会保存冻结的场景记录，并明确显示 `Image generation is not available yet.`，不会显示演示图片或冒充生成成功。图像任务接口已预留，模拟服务只用于自动测试；仅配置 AI 连接还不能生成照片。
+点击拍照会保存冻结的场景和生成配置，异步调用DeepSeek整理提示词，再提交ComfyUI工作流。完成后图片保存在真实运行文件中并显示；关闭拍照窗口不取消后台任务。缺少密钥、生成配置或工作流不兼容时明确报错，不以演示图片替代。仅连接检查成功还不能证明实际工作流已可用；真实模型的画面效果仍待配置后的样本验证。步骤及恢复范围见[摄像头生成配置](docs/ai-camera-generation.md)。
 
 首次打开客户端时建立 `runtime/network/`，包含可用系统编辑器修改的 `device.json`、`scene.json` 和独立的 `captures/<拍摄标识>.json`。设备状态在连接、刷新、拍照和重试时重新读取；场景在每次新拍照时读取。可修改 `scene.json` 中的 `state.door`（`open` / `closed`）、`state.lamp`（`on` / `off`）、人物和物品等，再拍照观察记录变化。场景中的 `world_time` 是显式保存的世界时间；当前没有自动时钟或人物调度。
 

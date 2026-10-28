@@ -23,6 +23,7 @@ private:
     QComboBox *m_model;
     QLineEdit *m_comfyUiUrl;
     QLineEdit *m_comfyUiKey;
+    QLineEdit *m_cameraProfile;
     QSpinBox *m_timeout;
     QGroupBox *m_deepSeekGroup;
     QGroupBox *m_comfyUiGroup;

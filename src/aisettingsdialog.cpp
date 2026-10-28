@@ -1,8 +1,12 @@
 #include "aisettingsdialog.h"
+#include "aicameraprofile.h"
 
 #include <QComboBox>
 #include <QDialogButtonBox>
 #include <QFormLayout>
+#include <QFile>
+#include <QFileDialog>
+#include <QSaveFile>
 #include <QGroupBox>
 #include <QHBoxLayout>
 #include <QLabel>
@@ -11,6 +15,7 @@
 #include <QPushButton>
 #include <QSignalBlocker>
 #include <QSpinBox>
+#include <QTabWidget>
 #include <QVBoxLayout>
 
 namespace {
@@ -19,7 +24,7 @@ QLabel *statusLabel(const QString &name, QWidget *parent) {
     label->setObjectName(name);
     label->setTextFormat(Qt::PlainText);
     label->setWordWrap(true);
-    label->setMinimumHeight(label->fontMetrics().height() * 2);
+    label->setMinimumHeight(label->fontMetrics().height());
     return label;
 }
 void showStatus(QLabel *label, const QString &text, bool success = false) {
@@ -70,6 +75,12 @@ AiSettingsDialog::AiSettingsDialog(QWidget *parent, const AiSettingsStore &store
     intro->setWordWrap(true);
     layout->addWidget(intro);
 
+    auto *tabs = new QTabWidget(this);
+    auto *connections = new QWidget(tabs);
+    auto *connectionLayout = new QVBoxLayout(connections);
+    tabs->addTab(connections, "Connections");
+    layout->addWidget(tabs);
+
     m_deepSeekGroup = new QGroupBox("DeepSeek", this);
     auto *deepSeekForm = new QFormLayout(m_deepSeekGroup);
     deepSeekForm->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
@@ -94,7 +105,7 @@ AiSettingsDialog::AiSettingsDialog(QWidget *parent, const AiSettingsStore &store
     deepSeekForm->addRow(QString(), deepSeekTest);
     m_deepSeekStatus = statusLabel("deepSeekStatus", m_deepSeekGroup);
     deepSeekForm->addRow(m_deepSeekStatus);
-    layout->addWidget(m_deepSeekGroup);
+    connectionLayout->addWidget(m_deepSeekGroup);
 
     m_comfyUiGroup = new QGroupBox("ComfyUI (self-hosted server)", this);
     auto *comfyUiForm = new QFormLayout(m_comfyUiGroup);
@@ -115,7 +126,7 @@ AiSettingsDialog::AiSettingsDialog(QWidget *parent, const AiSettingsStore &store
     comfyUiForm->addRow(QString(), comfyUiTest);
     m_comfyUiStatus = statusLabel("comfyUiStatus", m_comfyUiGroup);
     comfyUiForm->addRow(m_comfyUiStatus);
-    layout->addWidget(m_comfyUiGroup);
+    connectionLayout->addWidget(m_comfyUiGroup);
 
     auto *timeoutRow = new QFormLayout;
     m_timeout = new QSpinBox(this);
@@ -123,7 +134,62 @@ AiSettingsDialog::AiSettingsDialog(QWidget *parent, const AiSettingsStore &store
     m_timeout->setRange(1, 120);
     m_timeout->setSuffix(" seconds");
     timeoutRow->addRow("Connection timeout", m_timeout);
-    layout->addLayout(timeoutRow);
+    connectionLayout->addLayout(timeoutRow);
+    auto *generation = new QWidget(tabs);
+    auto *generationLayout = new QVBoxLayout(generation);
+    tabs->addTab(generation, "Camera generation");
+    auto *explanation = new QLabel("Use a camera profile to bind a ComfyUI API workflow to the snapshot's prompt, size and seed. "
+        "It can also include visual style guidance for DeepSeek.\n\n"
+        "Export the example and adapt it to a workflow tested in your ComfyUI, including your checkpoint name. "
+        "Snapshot reference assets are not supported yet.", generation);
+    explanation->setWordWrap(true);
+    generationLayout->addWidget(explanation);
+    auto *profileRow = new QHBoxLayout;
+    m_cameraProfile = new QLineEdit(generation);
+    m_cameraProfile->setObjectName("cameraGenerationProfile");
+    m_cameraProfile->setPlaceholderText("Camera profile JSON file");
+    auto *browse = new QPushButton("Browse...", generation);
+    browse->setAutoDefault(false);
+    profileRow->addWidget(m_cameraProfile, 1); profileRow->addWidget(browse);
+    generationLayout->addLayout(profileRow);
+    auto *profileButtons = new QHBoxLayout;
+    auto *exportExample = new QPushButton("Export example...", generation);
+    auto *verify = new QPushButton("Check profile", generation);
+    exportExample->setAutoDefault(false); verify->setAutoDefault(false);
+    profileButtons->addWidget(exportExample); profileButtons->addWidget(verify); profileButtons->addStretch();
+    generationLayout->addLayout(profileButtons);
+    auto *profileStatus = statusLabel("cameraProfileStatus", generation);
+    generationLayout->addWidget(profileStatus);
+    generationLayout->addStretch();
+    auto *generationNote = new QLabel("Taking a snapshot sends its visible scene to DeepSeek and submits a ComfyUI image job. "
+        "The task freezes the selected profile; editing the file affects new captures. "
+        "Checking this profile validates its local format only.", generation);
+    generationNote->setWordWrap(true);
+    generationLayout->addWidget(generationNote);
+    connect(browse, &QPushButton::clicked, this, [this] {
+        const auto path = QFileDialog::getOpenFileName(this, "Choose camera profile", m_cameraProfile->text(), "JSON files (*.json)");
+        if (!path.isEmpty()) m_cameraProfile->setText(path);
+    });
+    connect(verify, &QPushButton::clicked, this, [this, profileStatus] {
+        QJsonObject profile; QString error;
+        if (AiCameraProfile::load(m_cameraProfile->text(), &profile, &error))
+            showStatus(profileStatus, "Profile format is valid. Verify the workflow in your ComfyUI before taking a snapshot.", true);
+        else showStatus(profileStatus, error);
+    });
+    connect(exportExample, &QPushButton::clicked, this, [this, profileStatus] {
+        const auto path = QFileDialog::getSaveFileName(this, "Export camera profile example", "camera-profile.json", "JSON files (*.json)");
+        if (path.isEmpty()) return;
+        QFile input(":/ai/camera-profile.example.json");
+        QSaveFile output(path); output.setDirectWriteFallback(false);
+        if (!input.open(QIODevice::ReadOnly)) { showStatus(profileStatus, "Cannot read the bundled example."); return; }
+        const auto bytes = input.readAll();
+        if (!output.open(QIODevice::WriteOnly) || output.write(bytes) != bytes.size() || !output.commit()) {
+            showStatus(profileStatus, "Cannot export the example file."); return;
+        }
+        m_cameraProfile->setText(path);
+        showStatus(profileStatus, "Example exported. Replace its checkpoint and adapt the workflow and bindings before saving.", true);
+    });
+    connect(m_cameraProfile, &QLineEdit::textChanged, profileStatus, &QLabel::clear);
     auto *note = new QLabel("Tests check API access only; they do not generate text or images.\n"
         "Keys are saved in Windows Credential Manager or macOS Keychain.\n"
         "These settings belong to the application, outside the simulated computer.", this);
@@ -145,6 +211,7 @@ AiSettingsDialog::AiSettingsDialog(QWidget *parent, const AiSettingsStore &store
     m_comfyUiUrl->setText(m_settings.comfyUiUrl);
     m_model->setEditText(m_settings.deepSeekModel);
     m_timeout->setValue(m_settings.timeoutSeconds);
+    m_cameraProfile->setText(m_settings.cameraProfilePath);
     QString key;
     if (!loaded) {
         showStatus(m_status, error);
@@ -152,6 +219,7 @@ AiSettingsDialog::AiSettingsDialog(QWidget *parent, const AiSettingsStore &store
         m_deepSeekGroup->setEnabled(false);
         m_comfyUiGroup->setEnabled(false);
         m_timeout->setEnabled(false);
+        generation->setEnabled(false);
     } else {
         if (m_store.readKey(m_settings.deepSeekKeyRef, &key, &error)) m_deepSeekKey->setText(key);
         else {
@@ -221,6 +289,7 @@ void AiSettingsDialog::save() {
     settings.deepSeekModel = m_model->currentText();
     settings.comfyUiUrl = m_comfyUiUrl->text();
     settings.timeoutSeconds = m_timeout->value();
+    settings.cameraProfilePath = m_cameraProfile->text().trimmed();
     QString error;
     if (!m_store.save(&settings, m_deepSeekKey->text(), m_comfyUiKey->text(), &error)) {
         showStatus(m_status, error); return;

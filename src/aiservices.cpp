@@ -1,4 +1,5 @@
 #include "aiservices.h"
+#include "aicameraprofile.h"
 
 #include <QDir>
 #include <QFile>
@@ -55,6 +56,9 @@ bool AiSettingsStore::load(AiServiceSettings *settings, QString *error) const {
     settings->comfyUiUrl = object.value("comfyui_url").toString();
     settings->comfyUiKeyRef = object.value("comfyui_key_ref").toString();
     settings->timeoutSeconds = timeout;
+    if (object.contains("camera_profile") && !object.value("camera_profile").isString())
+        return fail("Invalid camera profile path in AI settings.", error);
+    settings->cameraProfilePath = object.value("camera_profile").toString();
     return true;
 }
 
@@ -74,6 +78,10 @@ bool AiSettingsStore::save(AiServiceSettings *settings, const QString &deepSeekK
         return fail("Enter a DeepSeek model name (up to 256 characters).", error);
     if (settings->timeoutSeconds < 1 || settings->timeoutSeconds > 120)
         return fail("Connection timeout must be between 1 and 120 seconds.", error);
+    if (!settings->cameraProfilePath.isEmpty()) {
+        QJsonObject profile;
+        if (!AiCameraProfile::load(settings->cameraProfilePath, &profile, error)) return false;
+    }
     if (deepSeekKey.contains('\r') || deepSeekKey.contains('\n')
         || comfyUiKey.contains('\r') || comfyUiKey.contains('\n')
         || deepSeekKey.toUtf8().size() > 2048 || comfyUiKey.toUtf8().size() > 2048)
@@ -104,7 +112,7 @@ bool AiSettingsStore::save(AiServiceSettings *settings, const QString &deepSeekK
     const QJsonObject object{{"version", 1}, {"deepseek_url", next.deepSeekUrl},
         {"deepseek_model", next.deepSeekModel}, {"deepseek_key_ref", next.deepSeekKeyRef},
         {"comfyui_url", next.comfyUiUrl}, {"comfyui_key_ref", next.comfyUiKeyRef},
-        {"timeout_seconds", next.timeoutSeconds}};
+        {"timeout_seconds", next.timeoutSeconds}, {"camera_profile", next.cameraProfilePath}};
     const auto bytes = QJsonDocument(object).toJson();
     QSaveFile file(m_filePath);
     file.setDirectWriteFallback(false);
