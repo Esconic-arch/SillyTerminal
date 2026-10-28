@@ -183,7 +183,10 @@ int main(int argc, char **argv) {
     select(left, "renamed file.txt"); key(left, Qt::Key_Insert);
 
     key(left, Qt::Key_Tab);
-    check(right->hasFocus(), "Tab switches active panel");
+    // hasFocus() also requires the native window to own desktop focus, which
+    // is not guaranteed for a background Windows CTest process. Verify the
+    // window's intended focus target without depending on foreground rights.
+    check(manager.focusWidget() == right, "Tab switches the window focus target to the other panel");
     key(right, Qt::Key_C, Qt::AltModifier);
     input->setText("/var/log");
     ok->click();

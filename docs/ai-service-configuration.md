@@ -4,7 +4,7 @@
 
 本轮提供 DeepSeek 和自托管 ComfyUI 的真实服务配置、系统凭据保存，以及异步、只读的连接检查。窗口右上角的 **AI** 按钮打开设置；登录前也可以配置。保存和打开设置都不会自动连接服务。
 
-这层基础为后续 AI 调用服务。摄像头侧现已实现拍摄记录、可注入任务接口及图片查看与导出，见 [摄像头实现与交接](camera-implementation.md)。DeepSeek 提示词生成、ComfyUI 工作流提交与生成资源持久化尚待 AI 方向实现；双方的业务接口仍见 [拍照接口草案](ai-camera-interface.md)。
+这层基础已用于摄像头生成：在 **Camera generation** 页选择任务profile后，摄像头可调用DeepSeek整理画面、提交ComfyUI工作流并保存照片。配置格式、限制和验证范围见[摄像头生成适配](ai-camera-generation.md)；摄像头侧接口见[实现与交接](camera-implementation.md)。通用人物聊天及SillyTavern预设导入仍待后续任务。
 
 ## 如何配置
 

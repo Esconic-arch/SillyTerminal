@@ -19,6 +19,7 @@
 #include <QTcpSocket>
 #include <QTemporaryDir>
 #include <QThread>
+#include <QTabWidget>
 #include <QUuid>
 #include <cstdio>
 #include <functional>
@@ -256,6 +257,11 @@ int main(int argc, char **argv) {
     {
         AiSettingsDialog dialog(nullptr, uiStore);
         dialog.findChild<QLineEdit *>("deepSeekKey")->setText("synthetic-ui-key");
+        dialog.findChild<QLineEdit *>("cameraGenerationProfile")->setText(temp.path() + "/missing-profile.json");
+        dialog.findChild<QPushButton *>("saveAiSettings")->click();
+        check(dialog.result() != QDialog::Accepted && uiSecrets->data.isEmpty(),
+            "invalid generation profile is rejected before committing service credentials");
+        dialog.findChild<QLineEdit *>("cameraGenerationProfile")->clear();
         dialog.findChild<QPushButton *>("saveAiSettings")->click();
         check(dialog.result() == QDialog::Accepted && !read(uiPath).contains("synthetic-ui-key"),
             "Save commits a settings draft without storing its key in JSON");
@@ -278,6 +284,10 @@ int main(int argc, char **argv) {
         QCoreApplication::processEvents();
         check(dialog.grab().save(QCoreApplication::applicationDirPath() + "/ai-settings-preview.png"),
             "capture settings preview using synthetic configuration only");
+        dialog.findChild<QTabWidget *>()->setCurrentIndex(1);
+        QCoreApplication::processEvents();
+        check(dialog.grab().save(QCoreApplication::applicationDirPath() + "/ai-generation-settings-preview.png"),
+            "capture generation profile settings preview");
     }
     const auto savedUi = read(uiPath);
     uiSecrets->data.clear();

@@ -34,8 +34,8 @@ public:
     virtual CameraImageData readImage(const QString &resourceId) = 0;
 };
 
-// Production default until the AI module supplies an adapter. No demonstration
-// image or fabricated successful capture is returned to the player.
+// Fallback for clients constructed without an injected provider. The application
+// supplies its AI adapter; this fallback never fabricates a successful capture.
 class UnavailableCameraImageProvider final : public CameraImageProvider {
 public:
     CameraImageTask submit(const QJsonObject &) override {

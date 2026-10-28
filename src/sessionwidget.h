@@ -3,6 +3,8 @@
 #include "localidentity.h"
 #include <QWidget>
 #include <functional>
+#include <memory>
+class CameraImageProvider;
 
 class LoginWidget;
 class TerminalWidget;
@@ -11,7 +13,8 @@ struct LoginResult;
 
 class SessionWidget : public QWidget {
 public:
-    explicit SessionWidget(const QString &worldRoot = {}, QWidget *parent = nullptr);
+    explicit SessionWidget(const QString &worldRoot = {}, QWidget *parent = nullptr,
+        std::shared_ptr<CameraImageProvider> cameraImages = {});
     bool loggedIn() const { return m_terminal != nullptr; }
     LocalIdentity identity() const { return m_identity; }
     QString currentDirectory() const;
@@ -22,6 +25,7 @@ public:
 
 private:
     QString m_worldRoot;
+    std::shared_ptr<CameraImageProvider> m_cameraImages;
     LocalIdentity m_identity;
     QStackedLayout *m_stack;
     LoginWidget *m_login;

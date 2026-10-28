@@ -4,6 +4,8 @@
 #include <QDateTime>
 #include <QTextEdit>
 #include <functional>
+#include <memory>
+class CameraImageProvider;
 
 class QInputMethodEvent;
 class QKeyEvent;
@@ -18,7 +20,8 @@ class McFileManager;
 class TerminalWidget : public QTextEdit {
 public:
     explicit TerminalWidget(QWidget *parent = nullptr, const QString &worldRoot = {},
-        const LocalIdentity &identity = {}, const QDateTime &previousLogin = {});
+        const LocalIdentity &identity = {}, const QDateTime &previousLogin = {},
+        std::shared_ptr<CameraImageProvider> cameraImages = {});
     void runCommand(const QString &command);
     void showAppearanceSettings();
     bool smokeTest(const QString &appearancePreviewPath = {});
@@ -35,6 +38,7 @@ protected:
 
 private:
     TerminalCore m_core;
+    std::shared_ptr<CameraImageProvider> m_cameraImages;
     int m_inputStart = 0;
     int m_historyIndex = 0;
     QString m_draft;

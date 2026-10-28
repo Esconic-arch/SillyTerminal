@@ -44,8 +44,8 @@ const QColor errorColor("#f0a6a9");
 }
 
 TerminalWidget::TerminalWidget(QWidget *parent, const QString &worldRoot,
-    const LocalIdentity &identity, const QDateTime &previousLogin)
-    : QTextEdit(parent), m_core(worldRoot, identity) {
+    const LocalIdentity &identity, const QDateTime &previousLogin, std::shared_ptr<CameraImageProvider> cameraImages)
+    : QTextEdit(parent), m_core(worldRoot, identity), m_cameraImages(std::move(cameraImages)) {
     setAcceptRichText(false);
     setUndoRedoEnabled(false);
     setAcceptDrops(false);
@@ -147,7 +147,7 @@ void TerminalWidget::submit() {
     if (result.clear) { clearScreen(); return; }
     if (result.openBrowser) openBrowser(result.browserUrl);
     if (result.openCamera) {
-        CameraDialog dialog(m_core, result.cameraAddress, window());
+        CameraDialog dialog(m_core, result.cameraAddress, window(), m_cameraImages);
         dialog.exec();
         setFocus();
     }
