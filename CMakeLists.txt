@@ -33,6 +33,7 @@ qt_add_resources(terminal_core initial_world
     FILES
         assets/initial-world/home/guest/notes.txt
         assets/initial-world/home/guest/documents/welcome.txt
+        assets/initial-world/home/guest/documents/home-network.txt
         "assets/initial-world/home/guest/documents/quick start.txt"
         assets/initial-world/home/guest/projects/README.md
         assets/initial-world/home/guest/.config/session.conf
@@ -96,9 +97,21 @@ add_library(mc_file_manager src/mcfilemanager.cpp src/mcfilemanager.h)
 target_link_libraries(mc_file_manager PUBLIC terminal_core Qt6::Widgets)
 target_include_directories(mc_file_manager PUBLIC src)
 
+add_library(camera_core src/cameracore.cpp src/cameracore.h src/cameraimageprovider.h)
+target_link_libraries(camera_core PUBLIC Qt6::Core PRIVATE Qt6::Network)
+target_include_directories(camera_core PUBLIC src)
+qt_add_resources(camera_core initial_network
+    PREFIX "/initial-network"
+    BASE "${CMAKE_CURRENT_SOURCE_DIR}/assets/initial-network"
+    FILES assets/initial-network/device.json assets/initial-network/scene.json
+)
+add_library(camera_ui src/cameradialog.cpp src/cameradialog.h)
+target_link_libraries(camera_ui PUBLIC camera_core terminal_core Qt6::Widgets)
+target_include_directories(camera_ui PUBLIC src)
+
 add_library(terminal_ui src/terminalwidget.cpp src/terminalwidget.h src/textpager.cpp src/textpager.h
     src/terminalappearance.cpp src/terminalappearance.h)
-target_link_libraries(terminal_ui PUBLIC terminal_core vim_editor text_browser mc_file_manager Qt6::Widgets)
+target_link_libraries(terminal_ui PUBLIC terminal_core vim_editor text_browser mc_file_manager camera_ui Qt6::Widgets)
 target_include_directories(terminal_ui PUBLIC src)
 
 add_library(local_session src/loginwidget.cpp src/loginwidget.h src/sessionwidget.cpp src/sessionwidget.h)
@@ -119,6 +132,10 @@ set_target_properties(SillyTerminal PROPERTIES
 
 include(CTest)
 if(BUILD_TESTING)
+    add_executable(camera_tests tests/camera_tests.cpp)
+    target_link_libraries(camera_tests PRIVATE terminal_ui)
+    add_test(NAME camera COMMAND camera_tests)
+    set_tests_properties(camera PROPERTIES TIMEOUT 30 ENVIRONMENT "QT_FORCE_STDERR_LOGGING=1")
     add_executable(ai_services_tests tests/ai_services_tests.cpp)
     target_link_libraries(ai_services_tests PRIVATE ai_settings_ui)
     add_test(NAME ai_services COMMAND ai_services_tests)

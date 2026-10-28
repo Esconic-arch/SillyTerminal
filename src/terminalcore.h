@@ -1,6 +1,7 @@
 #pragma once
 
 #include "localidentity.h"
+#include <QByteArray>
 #include <QDateTime>
 #include <QList>
 #include <QString>
@@ -23,6 +24,8 @@ struct CommandResult {
     bool endSession = false;
     bool openFileManager = false;
     QStringList managerPaths;
+    bool openCamera = false;
+    QString cameraAddress;
 };
 
 struct WorldEntry {
@@ -58,6 +61,8 @@ public:
     QString initializationError() const { return m_initializationError; }
     LocalIdentity identity() const { return m_identity; }
     CommandResult saveFile(const QString &path, const QString &content);
+    // Export generated media into the same real, bounded filesystem. Never overwrite.
+    CommandResult saveNewBinaryFile(const QString &path, const QByteArray &bytes);
     // Structured access for programs; uses the same world boundary as shell commands.
     WorldDirectory listDirectory(const QString &path) const;
     CommandResult readTextFile(const QString &path) const;

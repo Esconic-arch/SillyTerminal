@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "id": "living-room",
+  "revision": "1",
+  "world_time": "2026-10-20T19:42:00+08:00",
+  "view": {
+    "id": "living-room-fixed",
+    "description": "Fixed camera in the living-room corner, looking slightly down. Window on the left, gray sofa in the middle, room door on the right, low coffee table in the foreground.",
+    "width": 1920,
+    "height": 1080
+  },
+  "state": {
+    "door": "closed",
+    "curtains": "closed",
+    "lamp": "on"
+  },
+  "objects": [
+    { "id": "blue-mug", "description": "one blue ceramic mug", "location": "on the coffee table", "visible": true }
+  ],
+  "people": [],
+  "constraints": [
+    "Keep the fixed viewpoint, furniture layout, and object identities.",
+    "Show only the people and objects specified in the visible facts.",
+    "Do not invent readable text or additional clues."
+  ],
+  "references": []
+}

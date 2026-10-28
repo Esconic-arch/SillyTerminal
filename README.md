@@ -48,7 +48,19 @@ dist\SillyTerminal\SillyTerminal.exe
 
 DeepSeek 默认地址为 `https://api.deepseek.com`；**Test connection / load models** 检查 API 访问并加载模型列表。ComfyUI 默认地址为 `http://127.0.0.1:8188`；**Test connection** 检查服务器是否返回系统信息。这些检查不生成文字或图片。检查当前草稿后，点击 **Save** 保存，**Cancel** 放弃修改。
 
-服务配置属于宿主应用的用户设置。密钥使用 Windows Credential Manager 或 macOS Keychain 保存，和游戏内账户、文件与命令历史分开。当前已完成配置和连接检查，摄像头拍照及组合生成流程仍待实现。说明和验证范围见 [AI 服务配置](docs/ai-service-configuration.md)。
+服务配置属于宿主应用的用户设置。密钥使用 Windows Credential Manager 或 macOS Keychain 保存，和游戏内账户、文件与命令历史分开。当前已完成配置和连接检查；摄像头客户端与拍摄记录已实现，真实的组合生成适配仍待 AI 方向提供。说明和验证范围见 [AI 服务配置](docs/ai-service-configuration.md)。
+
+### 固定家庭摄像头
+
+输入 `camera 192.168.50.23` 打开快照客户端，也可以输入 `camera` 后在窗口中填写地址。初始设备为客厅的 **Hearth H1 Fixed Indoor**，与虚构的书桌电脑位于同一家庭局域网。使用 `viewer` / `teacup-27` 登录后，可以刷新设备信息并点击 **Take snapshot** 请求一张照片；地址和登录不会访问宿主网络或真实摄像头。密码在窗口内输入，不进入命令历史。新世界的 `~/documents/home-network.txt` 保存了安装记录；已有世界保持原样，不补写新模板文件。
+
+摄像头固定视角，无转向或实时视频。打开客户端、登录、查看历史都不触发新的拍照。界面提供拍摄时刻、任务状态、重试、图片预览与 **Save image...**；保存目的地是虚构电脑中的真实文件路径，已有文件不会被覆盖。普通用户 `monitor` / `status-only` 仅能查看设备状态，不能拍照。
+
+**当前真实图片生成适配尚未交付。** 点击拍照会保存冻结的场景记录，并明确显示 `Image generation is not available yet.`，不会显示演示图片或冒充生成成功。图像任务接口已预留，模拟服务只用于自动测试；仅配置 AI 连接还不能生成照片。
+
+首次打开客户端时建立 `runtime/network/`，包含可用系统编辑器修改的 `device.json`、`scene.json` 和独立的 `captures/<拍摄标识>.json`。设备状态在连接、刷新、拍照和重试时重新读取；场景在每次新拍照时读取。可修改 `scene.json` 中的 `state.door`（`open` / `closed`）、`state.lamp`（`on` / `off`）、人物和物品等，再拍照观察记录变化。场景中的 `world_time` 是显式保存的世界时间；当前没有自动时钟或人物调度。
+
+修改或删除源文件不会被模板自动修复；内容无效时显示错误并保留原文件。旧拍摄记录保留完整快照，重试使用原场景；已完成图片再次打开直接读取资源。设备地址、账户、在线、服务开关和隐私模式也由文件控制。详细结构、外部编辑规则和 AI 交接入口见 [摄像头实现说明](docs/camera-implementation.md)。
 
 ### 终端命令
 
@@ -81,6 +93,7 @@ guest@silly:~$ cat /var/log/boot.log
 | `touch <文件>` | 创建空文件，或更新时间；不清空已有内容 |
 | `vim <文件>` | 在终端区域中使用简易 Vim 编辑文本 |
 | `browser [地址]` | 打开浏览器，省略地址进入收藏页 |
+| `camera [地址]` | 打开固定摄像头快照客户端 |
 | `mc [目录 [另一侧目录]]` | 打开双栏文件管理器 |
 | `mv <源> <目标>` | 移动或重命名文件、目录 |
 | `cp [-r] <源> <目标>` | 复制文件；`-r` 复制目录及其内容 |
