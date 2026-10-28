@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "id": "home-camera",
+  "name": "Living room",
+  "manufacturer": "Hearth",
+  "model": "H1 Fixed Indoor",
+  "firmware": "1.4.2",
+  "address": "http://192.168.50.23",
+  "online": true,
+  "http_enabled": true,
+  "privacy_mode": false,
+  "accounts": [
+    {
+      "username": "viewer",
+      "algorithm": "pbkdf2-sha256",
+      "iterations": 100000,
+      "salt": "000102030405060708090a0b0c0d0e0f",
+      "password_hash": "8003a731ca1feb981e32b8e33ea031fd5716373b6b877f89b89637523e7e36cb",
+      "can_capture": true
+    },
+    {
+      "username": "monitor",
+      "algorithm": "pbkdf2-sha256",
+      "iterations": 100000,
+      "salt": "000102030405060708090a0b0c0d0e0f",
+      "password_hash": "aa6476cae2a32161c1a5ad1ad1ffeaaabbea4d4ac4410bd34f454aa6d2000324",
+      "can_capture": false
+    }
+  ]
+}

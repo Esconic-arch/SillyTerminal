@@ -107,7 +107,7 @@ int main(int argc, char **argv) {
     check(!core.execute("pwd>journals/path.txt").error, "general output redirection without spaces");
     check(core.execute("cat journals/path.txt").text == "/home/guest\n", "line-oriented commands end stream output with newline");
     check(!core.execute("ls documents > journals/list.txt").error, "ls redirects to a file");
-    check(core.execute("cat journals/list.txt").text == "quick start.txt\nwelcome.txt\n", "piped and redirected ls uses one name per line");
+    check(core.execute("cat journals/list.txt").text == "home-network.txt\nquick start.txt\nwelcome.txt\n", "piped and redirected ls uses one name per line");
     core.saveFile("journals/search.txt", QString::fromUtf8("warning one\n普通信息\nWARNING two\nwarning.three"));
     check(core.execute("cat journals/search.txt|grep -Fin warning").output
         == "1:warning one\n3:WARNING two\n4:warning.three\n", "pipe accepts combined grep flags and preserves line numbers");

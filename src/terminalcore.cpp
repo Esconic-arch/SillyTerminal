@@ -20,7 +20,7 @@
 #include <functional>
 
 namespace {
-const QStringList commands = {"browser", "cat", "cd", "clear", "cp", "echo", "exit", "grep", "help", "history", "less", "logout", "ls",
+const QStringList commands = {"browser", "camera", "cat", "cd", "clear", "cp", "echo", "exit", "grep", "help", "history", "less", "logout", "ls",
     "mc", "mkdir", "mv", "pwd", "rm", "touch", "vim", "whoami"};
 constexpr int historyLimit = 1000;
 CommandResult fail(const QString &message, int status = 1) {
@@ -394,6 +394,18 @@ CommandResult TerminalCore::writeFile(const QString &path, const QString &conten
     return {};
 }
 
+CommandResult TerminalCore::saveNewBinaryFile(const QString &path, const QByteArray &bytes) {
+    if (bytes.isEmpty() || bytes.size() > 20 * 1024 * 1024) return fail("save: unsupported image size");
+    QString error;
+    const QString filename = physicalPath(resolve(path), error);
+    if (!error.isEmpty()) return fail("save: " + error);
+    if (!QFileInfo(filename).dir().exists()) return fail("save: parent directory does not exist");
+    QFile file(filename);
+    if (!file.open(QIODevice::WriteOnly | QIODevice::NewOnly)) return fail("save: cannot create file; existing files are never overwritten");
+    if (file.write(bytes) != bytes.size() || !file.flush()) return fail("save: write failed; check the destination file");
+    return {};
+}
+
 CommandResult TerminalCore::saveFile(const QString &path, const QString &content) {
     return writeFile(resolve(path), content, false);
 }
@@ -530,7 +542,7 @@ CommandResult TerminalCore::executePipeline(const QString &line) {
         const QString command = stage.words.first();
         if (stages.size() > 1 && commands.contains(command) && !textCommands.contains(command))
             return fail(command + ": this command cannot be used in a pipeline");
-        if ((command == "browser" || command == "vim" || command == "mc" || command == "clear"
+        if ((command == "browser" || command == "camera" || command == "vim" || command == "mc" || command == "clear"
             || command == "exit" || command == "logout")
             && !stage.redirects.isEmpty()) return fail(command + ": redirection is not supported for this interactive command");
         if (command == "history" && stage.words.contains("-c") && stages.size() > 1)
@@ -643,6 +655,16 @@ CommandResult TerminalCore::executeCommand(const QString &command, QStringList a
         return result;
     }
     if (command == "echo") return {args.join(' ')};
+    if (command == "camera") {
+        if (args == QStringList{"--help"} || args == QStringList{"-h"})
+            return {"Usage: camera [http://address]\nOpen the fixed-camera snapshot client. Sign in inside the client; take a snapshot explicitly."};
+        if (args.size() > 1 || (!args.isEmpty() && args.first().startsWith('-')))
+            return fail("usage: camera [http://address]");
+        CommandResult result;
+        result.openCamera = true;
+        if (!args.isEmpty()) result.cameraAddress = args.first();
+        return result;
+    }
     if (command == "browser") {
         if (args.size() > 1) return fail("usage: browser [https://site/path]");
         CommandResult result;
@@ -672,6 +694,7 @@ CommandResult TerminalCore::executeCommand(const QString &command, QStringList a
         if (!args.isEmpty()) return fail("usage: help");
         return {"AVAILABLE COMMANDS\n\n"
             "  browser [address]    Open the web browser\n"
+            "  camera [address]     Open the camera snapshot client\n"
             "  mc [dir [other]]     Open the two-panel file manager\n"
             "  ls [-a] [path]       List files and directories\n"
             "  cd [path]            Change directory; no path returns home\n"
@@ -908,6 +931,9 @@ Completion TerminalCore::complete(const QString &line, int position) const {
     QStringList candidates;
     if (commandPosition) {
         for (const auto &name : commands) if (name.startsWith(partial)) candidates.append(name);
+    } else if (!redirection && (command == "camera" || command == "browser")) {
+        // These arguments are service addresses, not paths in the local world.
+        return result;
     } else {
         const int slash = partial.lastIndexOf('/');
         const QString prefix = slash < 0 ? QString() : partial.left(slash + 1);

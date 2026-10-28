@@ -4,6 +4,7 @@
 #include "textpager.h"
 #include "mcfilemanager.h"
 #include "terminalappearance.h"
+#include "cameradialog.h"
 
 #include <QApplication>
 #include <QClipboard>
@@ -145,6 +146,11 @@ void TerminalWidget::submit() {
     }
     if (result.clear) { clearScreen(); return; }
     if (result.openBrowser) openBrowser(result.browserUrl);
+    if (result.openCamera) {
+        CameraDialog dialog(m_core, result.cameraAddress, window());
+        dialog.exec();
+        setFocus();
+    }
     if (result.openFileManager) openFileManager(result.managerPaths);
     if (!result.editPath.isEmpty()) openVim(result.editPath, result.editContent);
     if (result.openPager) openPager(result.pagerTitle, result.output);
