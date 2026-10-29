@@ -69,7 +69,7 @@ private:
     void finishHistorySearch(bool cancel);
     void killInput(int start, int end, bool backward);
     void applyAppearance(const QFont &font, int lineSpacing, bool save);
-    void openVim(const QString &path, const QString &content);
+    void openVim(const QString &path);
     void openBrowser(const QString &address);
     void openPager(const QString &title, const QString &content);
     void openFileManager(const QStringList &paths);

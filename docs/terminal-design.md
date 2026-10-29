@@ -8,6 +8,9 @@
 - [Bash 重定向](https://www.gnu.org/s/bash/manual/html_node/Redirections.html)：在执行命令前准备重定向，按出现顺序处理，`>` 截断，`>>` 追加，`<` 提供输入。
 - [Readline 历史搜索](https://www.gnu.org/software/bash/manual/html_node/Searching.html)与[剪切、恢复](https://www.gnu.org/s/bash/manual/html_node/Readline-Killing-Commands.html)：参考 Ctrl+R、Ctrl+U/K/W/Y 和连续剪切的操作习惯。搜索框使用 Qt 输入控件，以支持中文输入法；Esc 接受后继续编辑，Ctrl+G 还原原输入。
 - [GNU grep 手册](https://www.gnu.org/software/grep/manual/grep.html)：固定文字匹配明确要求 `-F`，行号从 1 开始，多个文件与递归搜索带文件名，使用 0/1/2 退出状态区分匹配、无匹配与错误。
+- [GNU find 起点](https://www.gnu.org/software/findutils/manual/html_node/find_html/Starting-points.html)和[名称模式](https://www.gnu.org/software/findutils/manual/html_node/find_html/Shell-Pattern-Matching.html)：目录树遍历、文件名模式、隐藏项和相对起点的输出形式。当前只实现一个起点以及名称、类型和最大深度筛选。
+- [GNU head](https://www.gnu.org/software/coreutils/manual/html_node/head-invocation.html)和[tail](https://www.gnu.org/software/coreutils/manual/html_node/tail-invocation.html)：默认前后 10 行、`-n`、标准输入和多文件标题。当前只提供非负行数的 UTF-8 文本截取。
+- [Vim 重新编辑与保存](https://vimhelp.org/editing.txt.html)：参考 `:e` / `:e!` 重新读取、保护未保存缓冲区，以及明确强制写入的命令习惯。
 - [less 项目](https://greenwoodsoftware.com/less/)及[作者维护的源码和手册](https://github.com/gwsw/less)：参考分页、/ 与 ? 搜索、n/N 重复搜索、q 退出的使用方式。
 - [util-linux login 手册](https://man7.org/linux/man-pages/man1/login.1.html)：参考控制台用户名、隐藏密码输入、验证后进入 Shell、显示上次成功登录时间的流程。
 - [Qt QPasswordDigestor](https://doc.qt.io/qt-6/qpassworddigestor.html)与 [QLineEdit EchoMode](https://doc.qt.io/qt-6/qlineedit.html#EchoMode-enum)：使用 Qt 的 PBKDF2 实现和 `NoEcho` 输入，不自行实现密码派生算法。
@@ -19,6 +22,14 @@
 命令历史与文件世界分开，位于 world 同级的 history.json，使用原子写入，最多 1000 条和 4 MiB，损坏的历史不自动覆盖。补全复用命令的词法规则，按光标位置识别命令、路径、管道与重定向，并对候选路径重新引用或转义。
 
 分页器保留阅读前的终端记录，内容只读，使用 Qt 正则表达式搜索，不实现完整 less 的选项、文件切换、外部命令或跟随文件增长。完整操作和限制见根目录 README。所有自动检查使用隔离的临时世界及设置目录。
+
+## 文件工具与外部编辑
+
+`find` 每次遍历磁盘上的目录，按名称、类型和深度筛选，使用显式栈保持父项先于子项的输出顺序。它与其他文件命令共享路径验证，不遍历链接，也不把世界文件替换为内存缓存。`head` / `tail` 对文件或输入流按 LF 边界截取，保留 CRLF 和未换行的末行，标准输出与诊断继续分开。
+
+终端启动 Vim 或从 mc 的 F4 进入时，重新读取当前磁盘内容，记录路径、是否存在和 SHA-256 内容摘要。普通保存前读取文件的实际字节并比较摘要，拒绝覆盖外部修改、外部删除或后来创建的同名目标；成功保存更新基线。未改变字节内容的时间戳变更不视为冲突。该机制是保存前的冲突检查和原子写入，不是宿主文件锁，不能提供跨进程的原子比较并写入保证。
+
+`:e` 在缓冲区未修改时重新读取；`:e!` 明确丢弃本地修改并重新读取，成功后清空旧撤销历史。读取失败、非法 UTF-8 或原文件已删除时保留缓冲区。`:w!` 和 `:wq!` 明确覆盖或重建目标，但仍检查世界目录、文件类型和路径边界，不绕过这些限制。不实现自动跟随、文件监听、合并、备份和跨进程锁。
 
 ## 本地登录
 

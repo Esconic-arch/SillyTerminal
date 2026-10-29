@@ -3,6 +3,7 @@
 
 #include <QApplication>
 #include <QDir>
+#include <QFile>
 #include <QInputMethodEvent>
 #include <QKeyEvent>
 #include <QLabel>
@@ -156,6 +157,35 @@ int main(int argc, char **argv) {
     });
     terminal.runCommand("echo from pipe | less");
     check(hosted && terminal.toPlainText().endsWith("guest@silly:~$ "), "piped pager restores terminal and prompt");
+    TerminalCore shared(world);
+    shared.saveFile("/home/guest/shared.txt", "original\n");
+    bool protectedSave = false, reloaded = false, recreated = false;
+    QTimer::singleShot(50, &terminal, [&] {
+        auto *view = terminal.findChild<QTextEdit *>("vimBuffer");
+        auto *line = terminal.findChild<QLineEdit *>("vimCommand");
+        if (!view || !line) return;
+        const auto issue = [&](const QString &text) {
+            key(view, Qt::Key_Colon, ":"); line->setText(text); key(line, Qt::Key_Return);
+        };
+        key(view, Qt::Key_I, "i"); type(view, "ours "); key(view, Qt::Key_Escape);
+        QFile disk(world + "/home/guest/shared.txt");
+        if (disk.open(QIODevice::WriteOnly | QIODevice::Truncate)) { disk.write("external\n"); disk.close(); }
+        issue(":wq");
+        protectedSave = line->text().contains("outside Vim") && view->toPlainText() == "ours original\n"
+            && shared.readTextFile("shared.txt").text == "external\n";
+        issue(":e!");
+        reloaded = view->toPlainText() == "external\n";
+        disk.remove();
+        issue(":w");
+        check(line->text().contains("outside Vim") && !disk.exists(), "hosted Vim refuses to recreate a deleted external file");
+        issue(":e!");
+        check(view->toPlainText() == "external\n" && line->text().contains("no longer exists"), "failed hosted reload preserves buffer after file deletion");
+        issue(":wq!");
+        recreated = disk.exists();
+    });
+    terminal.runCommand("vim shared.txt");
+    check(protectedSave && reloaded && recreated && shared.readTextFile("shared.txt").text == "external\n",
+        "hosted Vim detects external edits, reloads, and requires explicit force to recreate");
     std::fprintf(stderr, "%d checks, %d failures\n", checks, failures);
     return failures ? 1 : 0;
 }

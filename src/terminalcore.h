@@ -47,6 +47,14 @@ struct Completion {
     int cursor = -1;
 };
 
+struct TextFileSnapshot {
+    QString path;
+    QString text;
+    bool exists = false;
+    QByteArray digest;
+    QString error;
+};
+
 class TerminalCore {
 public:
     explicit TerminalCore(const QString &worldRoot = {}, const LocalIdentity &identity = {});
@@ -61,6 +69,8 @@ public:
     QString initializationError() const { return m_initializationError; }
     LocalIdentity identity() const { return m_identity; }
     CommandResult saveFile(const QString &path, const QString &content);
+    TextFileSnapshot readTextSnapshot(const QString &path) const;
+    CommandResult saveTextSnapshot(TextFileSnapshot &snapshot, const QString &content, bool force = false);
     // Export generated media into the same real, bounded filesystem. Never overwrite.
     CommandResult saveNewBinaryFile(const QString &path, const QByteArray &bytes);
     // Structured access for programs; uses the same world boundary as shell commands.
@@ -97,6 +107,8 @@ private:
     CommandResult executeCommand(const QString &command, QStringList args,
         const QString &input, bool hasInput, bool streamOutput);
     CommandResult grep(QStringList args, const QString &input, bool hasInput) const;
+    CommandResult findFiles(QStringList args) const;
+    CommandResult readLines(const QString &command, QStringList args, const QString &input, bool hasInput) const;
     CommandResult readFile(const QString &path) const;
     CommandResult writeFile(const QString &path, const QString &content, bool append);
     CommandResult transfer(const QString &command, const QStringList &args);

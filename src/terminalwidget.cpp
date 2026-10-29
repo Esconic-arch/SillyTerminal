@@ -152,7 +152,7 @@ void TerminalWidget::submit() {
         setFocus();
     }
     if (result.openFileManager) openFileManager(result.managerPaths);
-    if (!result.editPath.isEmpty()) openVim(result.editPath, result.editContent);
+    if (!result.editPath.isEmpty()) openVim(result.editPath);
     if (result.openPager) openPager(result.pagerTitle, result.output);
     else if (!result.output.isEmpty()) write(result.output, foreground);
     if (!result.diagnostics.isEmpty()) write(result.diagnostics, errorColor);
@@ -453,7 +453,7 @@ void TerminalWidget::openFileManager(const QStringList &paths) {
     QEventLoop loop;
     m_fileManager = new McFileManager(m_core, paths, font(), m_lineSpacing, [&loop] { loop.quit(); }, this);
     m_fileManager->viewText = [this](const QString &path, const QString &content) { openPager(path, content); };
-    m_fileManager->editText = [this](const QString &path, const QString &content) { openVim(path, content); };
+    m_fileManager->editText = [this](const QString &path, const QString &) { openVim(path); };
     m_fileManager->setGeometry(rect());
     m_fileManager->show();
     m_fileManager->raise();
@@ -492,11 +492,21 @@ void TerminalWidget::openBrowser(const QString &address) {
     setFocus();
 }
 
-void TerminalWidget::openVim(const QString &path, const QString &content) {
+void TerminalWidget::openVim(const QString &path) {
+    auto snapshot = m_core.readTextSnapshot(path);
+    if (!snapshot.error.isEmpty()) { write("vim: " + snapshot.error + '\n', errorColor); return; }
     QEventLoop loop;
-    m_vim = new VimEditor(path, content, font(), m_lineSpacing,
-        [this, path](const QString &text) { return m_core.saveFile(path, text); },
-        [&loop] { loop.quit(); }, this);
+    m_vim = new VimEditor(snapshot.path, snapshot.text, font(), m_lineSpacing,
+        [this, &snapshot](const QString &text, bool force) { return m_core.saveTextSnapshot(snapshot, text, force); },
+        [&loop] { loop.quit(); },
+        [this, &snapshot] {
+            const auto current = m_core.readTextSnapshot(snapshot.path);
+            if (!current.error.isEmpty()) return CommandResult{current.error, true};
+            if (snapshot.exists && !current.exists)
+                return CommandResult{"File no longer exists; buffer kept. Use :w! to recreate or :q! to exit.", true};
+            snapshot = current;
+            return CommandResult{snapshot.text};
+        }, this);
     m_vim->setGeometry(rect());
     m_vim->show();
     m_vim->raise();

@@ -1,6 +1,7 @@
 #include "terminalcore.h"
 
 #include <QCoreApplication>
+#include <QCryptographicHash>
 #include <QDateTime>
 #include <QDir>
 #include <QDirIterator>
@@ -20,8 +21,8 @@
 #include <functional>
 
 namespace {
-const QStringList commands = {"browser", "camera", "cat", "cd", "clear", "cp", "echo", "exit", "grep", "help", "history", "less", "logout", "ls",
-    "mc", "mkdir", "mv", "pwd", "rm", "touch", "vim", "whoami"};
+const QStringList commands = {"browser", "camera", "cat", "cd", "clear", "cp", "echo", "exit", "find", "grep", "head", "help", "history", "less", "logout", "ls",
+    "mc", "mkdir", "mv", "pwd", "rm", "tail", "touch", "vim", "whoami"};
 constexpr int historyLimit = 1000;
 CommandResult fail(const QString &message, int status = 1) {
     CommandResult result{message, true, false};
@@ -410,6 +411,49 @@ CommandResult TerminalCore::saveFile(const QString &path, const QString &content
     return writeFile(resolve(path), content, false);
 }
 
+TextFileSnapshot TerminalCore::readTextSnapshot(const QString &path) const {
+    TextFileSnapshot snapshot;
+    snapshot.path = resolve(path);
+    const QString native = physicalPath(snapshot.path, snapshot.error);
+    if (!snapshot.error.isEmpty()) return snapshot;
+    if (!QFileInfo(native).dir().exists()) { snapshot.error = "parent directory does not exist"; return snapshot; }
+    snapshot.exists = QFileInfo::exists(native);
+    if (!snapshot.exists) return snapshot;
+    const auto read = readFile(snapshot.path);
+    if (read.error) { snapshot.error = read.text; return snapshot; }
+    snapshot.text = read.text;
+    snapshot.digest = QCryptographicHash::hash(snapshot.text.toUtf8(), QCryptographicHash::Sha256);
+    return snapshot;
+}
+
+CommandResult TerminalCore::saveTextSnapshot(TextFileSnapshot &snapshot, const QString &content, bool force) {
+    if (!snapshot.error.isEmpty()) return fail(snapshot.error);
+    if (!force) {
+        QString error;
+        const QString native = physicalPath(snapshot.path, error);
+        if (!error.isEmpty()) return fail(error);
+        const bool exists = QFileInfo::exists(native);
+        QByteArray digest;
+        if (exists) {
+            if (QFileInfo(native).isDir()) return fail("path is a directory");
+            QFile file(native);
+            if (!file.open(QIODevice::ReadOnly)) return fail(file.errorString());
+            const auto bytes = file.readAll();
+            if (file.error() != QFileDevice::NoError) return fail(file.errorString());
+            digest = QCryptographicHash::hash(bytes, QCryptographicHash::Sha256);
+        }
+        if (exists != snapshot.exists || (exists && digest != snapshot.digest))
+            return fail("File changed or was deleted outside Vim. Use :e! to reload, :w! to overwrite, or :q! to discard.");
+    }
+    const auto saved = writeFile(snapshot.path, content, false);
+    if (!saved.error) {
+        snapshot.exists = true;
+        snapshot.text = content;
+        snapshot.digest = QCryptographicHash::hash(content.toUtf8(), QCryptographicHash::Sha256);
+    }
+    return saved;
+}
+
 WorldDirectory TerminalCore::listDirectory(const QString &path) const {
     WorldDirectory result;
     result.path = resolve(path);
@@ -536,7 +580,7 @@ CommandResult TerminalCore::executePipeline(const QString &line) {
         }
     }
     if (stages.last().words.isEmpty()) return fail("parse: expected a command");
-    const QStringList textCommands = {"cat", "echo", "grep", "help", "history", "less", "ls", "pwd", "whoami"};
+    const QStringList textCommands = {"cat", "echo", "find", "grep", "head", "help", "history", "less", "ls", "pwd", "tail", "whoami"};
     for (int i = 0; i < stages.size(); ++i) {
         const auto &stage = stages.at(i);
         const QString command = stage.words.first();
@@ -632,6 +676,8 @@ CommandResult TerminalCore::executeCommand(const QString &command, QStringList a
         return {lines.join('\n')};
     }
     if (command == "grep") return grep(args, input, hasInput);
+    if (command == "find") return findFiles(args);
+    if (command == "head" || command == "tail") return readLines(command, args, input, hasInput);
     if (command == "cat" || command == "less") {
         if (!args.isEmpty() && args.first() == "--") args.removeFirst();
         if (command == "less" && args.size() > 1) return fail("usage: less [file] (or command | less)");
@@ -700,6 +746,9 @@ CommandResult TerminalCore::executeCommand(const QString &command, QStringList a
             "  cd [path]            Change directory; no path returns home\n"
             "  pwd                  Print the current directory\n"
             "  cat [file ...]       Read text files or piped input\n"
+            "  find [path] ...      Find names: -name/-iname glob, -type f|d, -maxdepth n\n"
+            "  head [-n count] ...  Read the first 10 lines (or count) of files or stdin\n"
+            "  tail [-n count] ...  Read the last 10 lines (or count) of files or stdin\n"
             "  grep -F[nirv] ...    Search literal text; -n lines, -i ignore case, -r recursive\n"
             "  less [file]          Page through text; / search, n/N next/previous, q quit\n"
             "  history [count]      Show saved commands; history -c clears history\n"

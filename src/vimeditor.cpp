@@ -117,8 +117,8 @@ private:
 };
 
 VimEditor::VimEditor(const QString &path, const QString &content, const QFont &font,
-    int lineSpacing, SaveHandler save, CloseHandler close, QWidget *parent)
-    : QWidget(parent), m_path(path), m_savedText(content), m_save(std::move(save)), m_close(std::move(close)) {
+    int lineSpacing, SaveHandler save, CloseHandler close, ReloadHandler reload, QWidget *parent)
+    : QWidget(parent), m_path(path), m_savedText(content), m_save(std::move(save)), m_close(std::move(close)), m_reload(std::move(reload)) {
     setObjectName("vimEditor");
     setAttribute(Qt::WA_StyledBackground);
     setStyleSheet("#vimEditor { background: #1c1c1f; }");
@@ -156,6 +156,7 @@ VimEditor::VimEditor(const QString &path, const QString &content, const QFont &f
 }
 
 void VimEditor::setAppearance(const QFont &font, int lineSpacing) {
+    m_lineSpacing = lineSpacing;
     m_buffer->setFont(font);
     m_buffer->document()->setDefaultFont(font);
     m_buffer->setTabStopDistance(QFontMetricsF(font).horizontalAdvance(' ') * 4);
@@ -245,13 +246,28 @@ void VimEditor::startCommand(Mode mode) {
     refreshStatus();
 }
 
-bool VimEditor::save() {
-    const auto result = m_save(m_buffer->toPlainText());
+bool VimEditor::save(bool force) {
+    const auto result = m_save(m_buffer->toPlainText(), force);
     if (result.error) { message("Write failed: " + result.text, true); return false; }
     m_savedText = m_buffer->toPlainText();
     message(QString("%1  —  %2 lines written").arg(m_path).arg(m_buffer->document()->blockCount()));
     refreshStatus();
     return true;
+}
+
+void VimEditor::reload(bool force) {
+    if (!force && modified()) { message("E37: Unsaved changes. Use :w to save or :e! to discard and reload.", true); return; }
+    if (!m_reload) { message("Reload is not available for this buffer.", true); return; }
+    const auto result = m_reload();
+    if (result.error) { message("Read failed: " + result.text, true); return; }
+    m_buffer->setUndoRedoEnabled(false);
+    m_buffer->setPlainText(result.text);
+    m_savedText = m_buffer->toPlainText();
+    setAppearance(m_buffer->font(), m_lineSpacing);
+    m_buffer->setUndoRedoEnabled(true);
+    m_pending.clear();
+    refreshStatus();
+    message(m_path + " reloaded");
 }
 
 void VimEditor::quit(bool force) {
@@ -271,13 +287,14 @@ void VimEditor::executeCommand() {
         return;
     }
     const QString command = (text.startsWith(':') ? text.mid(1) : text).trimmed();
-    if (command == "w") save();
+    if (command == "w" || command == "w!") save(command.endsWith('!'));
+    else if (command == "e" || command == "e!") reload(command.endsWith('!'));
     else if (command == "q") quit(false);
     else if (command == "q!") quit(true);
-    else if (command == "wq") { if (save()) quit(false); }
+    else if (command == "wq" || command == "wq!") { if (save(command.endsWith('!'))) quit(false); }
     else if (command == "x") { if (!modified() || save()) quit(false); }
-    else if (command == "help") message("i/a/I/A/o/O insert | hjkl/arrows move | gg/G 0/$ w/b | x dd yy p u | Ctrl+R redo | / n N");
-    else if (!command.isEmpty()) message("Not supported: :" + command + "   (try :w, :q, :wq, :q!, :help)", true);
+    else if (command == "help") message("i/a/I/A/o/O insert | hjkl/arrows | gg/G 0/$ w/b | x dd yy p u | Ctrl+R redo | / n N | :e[!] reload :w[!] save :wq[!] :q[!]");
+    else if (!command.isEmpty()) message("Not supported: :" + command + "   (try :w, :w!, :e, :e!, :q, :wq, :q!, :help)", true);
 }
 
 void VimEditor::findNext(bool backward) {

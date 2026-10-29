@@ -20,7 +20,15 @@ FILES
 
 READING
   cat <file>  Read a text file
+  head -n 5 <file>      Read the first five lines
+  tail -n 5 <file>      Read the last five lines
+  find . -name "*.txt"  Find text filenames below this directory
   Use quotes around paths containing spaces.
+
+EDITING
+  vim <file>  Open a file; i to insert, Esc then :wq to save and quit
+  :e!         Discard buffer edits and reload the current disk file
+  :w!         Explicitly overwrite an externally changed or deleted file
 
 KEYBOARD
   Up / Down   Command history

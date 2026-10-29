@@ -40,12 +40,12 @@ int main(int argc, char **argv) {
         if (!ok) { ++failures; std::fprintf(stderr, "FAIL: %s\n", name); }
     };
     const QFont font("monospace", 12);
-    const auto discardSave = [](const QString &) { return CommandResult{}; };
+    const auto discardSave = [](const QString &, bool) { return CommandResult{}; };
     {
         bool closed = false;
         QString saved;
         VimEditor editor("/note.txt", "alpha\nbeta\n", font, 115,
-            [&](const QString &text) { saved = text; return CommandResult{}; }, [&] { closed = true; });
+            [&](const QString &text, bool) { saved = text; return CommandResult{}; }, [&] { closed = true; });
         check(editor.findChild<QLabel *>("vimMode")->text() == "NORMAL", "starts in normal mode");
         keys(editor, "z");
         check(buffer(editor)->toPlainText() == "alpha\nbeta\n", "normal mode does not type arbitrary letters");
@@ -134,7 +134,7 @@ int main(int argc, char **argv) {
     {
         bool closed = false;
         VimEditor editor("/failed.txt", "original", font, 115,
-            [](const QString &) { return CommandResult{"read-only target", true}; }, [&] { closed = true; });
+            [](const QString &, bool) { return CommandResult{"read-only target", true}; }, [&] { closed = true; });
         keys(editor, "iX"); escape(editor);
         command(editor, ":wq");
         check(!closed && editor.findChild<QLineEdit *>("vimCommand")->text().contains("Write failed"), "failed write does not quit");
@@ -166,7 +166,7 @@ int main(int argc, char **argv) {
         check(opened.editPath == "/home/guest/new note.txt" && !opened.error && opened.editContent.isEmpty(), "vim command opens a new file");
         bool closed = false;
         VimEditor editor(opened.editPath, opened.editContent, font, 115,
-            [&](const QString &text) { return core.saveFile(opened.editPath, text); }, [&] { closed = true; });
+            [&](const QString &text, bool) { return core.saveFile(opened.editPath, text); }, [&] { closed = true; });
         QInputMethodEvent chinese;
         chinese.setCommitString(QString::fromUtf8("你好，Vim。"));
         QCoreApplication::sendEvent(buffer(editor), &chinese);
@@ -181,6 +181,41 @@ int main(int argc, char **argv) {
         check(reloaded.execute("cat 'new note.txt'").text == QString::fromUtf8("你好，Vim。"), "vim content survives restart");
         check(core.execute("vim /missing/file.txt").error, "vim rejects missing parent");
         check(core.execute("vim documents").error, "vim rejects directories");
+    }
+    {
+        QString disk = "outside content\r\n";
+        bool closed = false, forced = false;
+        bool unreadable = false;
+        VimEditor editor("/shared.txt", "original\n", font, 125,
+            [&](const QString &text, bool force) {
+                forced = force;
+                if (!force) return CommandResult{"File changed outside Vim", true};
+                disk = text;
+                return CommandResult{};
+            }, [&] { closed = true; }, [&] {
+                return unreadable ? CommandResult{"invalid UTF-8", true} : CommandResult{disk};
+            });
+        keys(editor, "iours "); escape(editor);
+        const QString ours = buffer(editor)->toPlainText();
+        command(editor, ":wq");
+        check(!closed && buffer(editor)->toPlainText() == ours && disk.startsWith("outside"), "save conflict keeps Vim open with local changes intact");
+        command(editor, ":e");
+        check(buffer(editor)->toPlainText() == ours && editor.findChild<QLineEdit *>("vimCommand")->text().contains("E37"), "reload refuses to discard unsaved edits without bang");
+        unreadable = true;
+        command(editor, ":e!");
+        check(buffer(editor)->toPlainText() == ours && editor.findChild<QLineEdit *>("vimCommand")->text().contains("Read failed"), "failed reload keeps local text and undo history");
+        unreadable = false;
+        command(editor, ":e!");
+        check(buffer(editor)->toPlainText() == "outside content\n", "forced reload reads and normalizes external text");
+        keys(editor, "u");
+        check(buffer(editor)->toPlainText() == "outside content\n", "reloading clears stale undo history");
+        command(editor, ":e");
+        check(!editor.findChild<QLineEdit *>("vimCommand")->text().contains("E37"), "reloaded buffer is unmodified");
+        keys(editor, "inew "); escape(editor);
+        command(editor, ":w!");
+        check(forced && !closed && disk.startsWith("new "), "bang write passes explicit force flag without quitting");
+        command(editor, ":wq!");
+        check(closed && forced, "forced write-and-quit closes only after successful save");
     }
     std::fprintf(stderr, "%d checks, %d failures\n", checks, failures);
     return failures ? 1 : 0;
