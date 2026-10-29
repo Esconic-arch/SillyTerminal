@@ -17,6 +17,7 @@ struct AiServiceSettings {
     QString comfyUiUrl = QStringLiteral("http://127.0.0.1:8188");
     QString comfyUiKeyRef;
     QString cameraProfilePath;
+    QString cameraTextPresetPath;
     int timeoutSeconds = 15;
 };
 

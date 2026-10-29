@@ -1,5 +1,6 @@
 #include "aicameraimageprovider.h"
 #include "aicameraprofile.h"
+#include "aipromptpreset.h"
 
 #include <QBuffer>
 #include <QCryptographicHash>
@@ -138,6 +139,18 @@ public:
             && !AiCameraProfile::validate(object.value("profile").toObject(), &profileError)) {
             *error = "The task's frozen camera profile is invalid. Existing content was preserved."; return {};
         }
+        if (object.contains("text_request")) {
+            const auto request = object.value("text_request").toObject();
+            if (!object.value("text_request").isObject() || request.value("version").toDouble() != 1
+                || !request.value("preset").isObject() || !request.value("messages").isArray()
+                || object.value("text_request_sha256").toString() != hash(request)
+                || !AiPromptPreset::validate(request.value("preset").toObject(), &profileError)
+                || !AiPromptPreset::validateMessages(request.value("messages").toArray(), &profileError)) {
+                *error = "The task's frozen text preset or messages are invalid. Existing content was preserved."; return {};
+            }
+        } else if (object.contains("text_request_sha256")) {
+            *error = "The task's frozen text request is missing. Existing content was preserved."; return {};
+        }
         return object;
     }
     bool write(const QJsonObject &object, const QByteArray &before) {
@@ -190,6 +203,15 @@ public:
         if (status == "queued" || status == "generating" || status == "uncertain") enqueue(id, false);
         return task(object);
     }
+    bool freezeTextRequest(QJsonObject *record, const QString &path, QString *error) {
+        QJsonObject preset; QJsonArray messages;
+        if (!AiPromptPreset::load(path, &preset, error)
+            || !AiCameraProfile::messages(record->value("profile").toObject(), preset,
+                record->value("snapshot").toObject(), &messages, error)) return false;
+        const QJsonObject request{{"version", 1}, {"preset", preset}, {"messages", messages}};
+        record->insert("text_request", request); record->insert("text_request_sha256", hash(request));
+        return true;
+    }
     bool freezeProfile(QJsonObject *record, QString *error) {
         AiServiceSettings current;
         QJsonObject profile, ignored;
@@ -199,7 +221,11 @@ public:
             || !AiConnectionClient::normalizeBaseUrl(current.comfyUiUrl, &comfy, error)
             || !AiCameraProfile::load(current.cameraProfilePath, &profile, error)
             || !AiCameraProfile::bind(profile, record->value("snapshot").toObject(), {}, 1, &ignored, error)) return false;
-        record->insert("profile", profile); record->insert("profile_sha256", hash(profile));
+        // Only commit the frozen configuration when all local preflight checks pass.
+        auto frozen = *record;
+        frozen.insert("profile", profile); frozen.insert("profile_sha256", hash(profile));
+        if (!freezeTextRequest(&frozen, current.cameraTextPresetPath, error)) return false;
+        *record = frozen;
         record->insert("deepseek_url", ds.toString()); record->insert("deepseek_model", current.deepSeekModel);
         record->insert("comfyui_url", comfy.toString());
         return true;
@@ -285,12 +311,13 @@ public:
         if (!job.value("image").toObject().isEmpty()) {
             if (configure(false)) download();
         } else if (entry.second) {
-            if (!configure(job.value("description").toObject().isEmpty())) return;
             if (job.value("profile").toObject().isEmpty()) {
-                QJsonObject profile;
-                if (!AiCameraProfile::load(config.cameraProfilePath, &profile, &error)) { fail(error); return; }
-                job.insert("profile", profile); job.insert("profile_sha256", hash(profile));
+                if (!freezeProfile(&job, &error)) { fail(error); return; }
             }
+            // Pre-preset records keep the built-in task instructions. A newly
+            // selected preset must never be attached to an old capture on retry.
+            if (!job.contains("text_request") && !freezeTextRequest(&job, {}, &error)) { fail(error); return; }
+            if (!configure(job.value("description").toObject().isEmpty())) return;
             QJsonObject workflow;
             if (!AiCameraProfile::bind(job.value("profile").toObject(), job.value("snapshot").toObject(),
                 {}, 1, &workflow, &error)) { fail(error); return; }
@@ -345,11 +372,7 @@ public:
     }
     void describe() {
         if (!state("generating", "DeepSeek is describing the frozen camera scene.", "describing")) return;
-        const auto profile = job.value("profile").toObject();
-        const QString instructions = AiCameraProfile::defaultInstructions()
-            + "\nAdditional visual style guidance:\n" + profile.value("instructions").toString();
-        const QJsonArray messages{QJsonObject{{"role", "system"}, {"content", instructions}},
-            QJsonObject{{"role", "user"}, {"content", QString::fromUtf8(QJsonDocument(job.value("snapshot").toObject()).toJson())}}};
+        const auto messages = job.value("text_request").toObject().value("messages").toArray();
         const QJsonObject body{{"model", job.value("deepseek_model")}, {"messages", messages},
             {"response_format", QJsonObject{{"type", "json_object"}}}, {"stream", false},
             {"max_tokens", 2048}, {"thinking", QJsonObject{{"type", "disabled"}}}};

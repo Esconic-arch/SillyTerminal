@@ -1,4 +1,5 @@
 #include "aicameraprofile.h"
+#include "aipromptpreset.h"
 #include <QFile>
 #include <QFileInfo>
 #include <QJsonArray>
@@ -21,6 +22,16 @@ QString AiCameraProfile::defaultInstructions() {
         "Return a JSON object only: {\"prompt\":\"a concise English visual description\","
         "\"negative_prompt\":\"optional exclusions\",\"used_fact_ids\":[\"each visible fact id\"]}. "
         "Include every supplied fact id exactly once. Never return a workflow, commands or file paths.");
+}
+
+bool AiCameraProfile::messages(const QJsonObject &profile, const QJsonObject &preset,
+    const QJsonObject &snapshot, QJsonArray *messages, QString *error) {
+    const QString instructions = defaultInstructions()
+        + "\nAdditional visual style guidance:\n" + profile.value("instructions").toString();
+    return AiPromptPreset::compose(preset, instructions, QString::fromUtf8(QJsonDocument(snapshot).toJson()),
+        "Describe only the supplied fixed-camera snapshot. Preserve every visible fact and constraint. "
+        "Return JSON only, with prompt, optional negative_prompt and used_fact_ids containing every supplied fact id exactly once. "
+        "Do not continue the example dialogue or invent events.", messages, error);
 }
 
 bool AiCameraProfile::validate(const QJsonObject &profile, QString *error) {

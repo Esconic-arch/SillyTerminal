@@ -64,6 +64,8 @@ DeepSeek 默认地址为 `https://api.deepseek.com`；**Test connection / load m
 
 服务配置属于宿主应用的用户设置。密钥使用 Windows Credential Manager 或 macOS Keychain 保存，和游戏内账户、文件与命令历史分开。摄像头已接入DeepSeek → ComfyUI生成适配器；还需在 **Camera generation** 中选择与本机ComfyUI匹配的工作流配置。可导出示例，替换checkpoint与API工作流并填写输入绑定。说明见[AI服务配置](docs/ai-service-configuration.md)和[摄像头生成配置](docs/ai-camera-generation.md)。
 
+**Text preset** 提供可选的文本预设入口：暂时留空即可使用内置指令，也可导出空模板，之后填入模块、启用并选择文件。支持本地校验和消息预览；拍摄会保存当时的预设与完整消息，修改源文件供新拍摄使用。原生格式和后续酒馆导入边界见[文本预设接口](docs/ai-prompt-presets.md)。
+
 ### 固定家庭摄像头
 
 输入 `camera 192.168.50.23` 打开快照客户端，也可以输入 `camera` 后在窗口中填写地址。初始设备为客厅的 **Hearth H1 Fixed Indoor**，与虚构的书桌电脑位于同一家庭局域网。使用 `viewer` / `teacup-27` 登录后，可以刷新设备信息并点击 **Take snapshot** 请求一张照片；地址和登录不会访问宿主网络或真实摄像头。密码在窗口内输入，不进入命令历史。新世界的 `~/documents/home-network.txt` 保存了安装记录；已有世界保持原样，不补写新模板文件。

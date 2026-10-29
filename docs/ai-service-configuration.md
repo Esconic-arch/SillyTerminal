@@ -6,6 +6,8 @@
 
 这层基础已用于摄像头生成：在 **Camera generation** 页选择任务profile后，摄像头可调用DeepSeek整理画面、提交ComfyUI工作流并保存照片。配置格式、限制和验证范围见[摄像头生成适配](ai-camera-generation.md)；摄像头侧接口见[实现与交接](camera-implementation.md)。通用人物聊天及SillyTavern预设导入仍待后续任务。
 
+**Text preset** 页提供可留空的[原生文本预设接口](ai-prompt-presets.md)，支持导出空模板、选择文件和本地消息预览；它供摄像头描述步骤使用，独立于 ComfyUI 工作流。设置文件的可选 `camera_text_preset` 字段保存预设绝对路径；旧配置默认使用内置任务指令。
+
 ## 如何配置
 
 DeepSeek 填写 API 根地址、API key 和模型名称。官方根地址默认是 `https://api.deepseek.com`；可使用包含 `/v1` 的兼容地址，不要把 `/chat/completions` 填入根地址。默认模型名称可编辑；以当前服务实际返回的模型列表为准。

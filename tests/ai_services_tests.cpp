@@ -14,6 +14,7 @@
 #include <QLineEdit>
 #include <QMap>
 #include <QPalette>
+#include <QPlainTextEdit>
 #include <QPushButton>
 #include <QTcpServer>
 #include <QTcpSocket>
@@ -136,6 +137,10 @@ int main(int argc, char **argv) {
     check(store.load(&reopened, &error) && reopened.deepSeekUrl.endsWith("/v1")
         && reopened.deepSeekModel == "test-model" && store.readKey(reopened.deepSeekKeyRef, &key, &error)
         && key == "synthetic-deepseek-secret", "saved configuration and keys can be reopened independently");
+    auto legacyConfig = QJsonDocument::fromJson(before).object(); legacyConfig.remove("camera_text_preset");
+    const QString legacyPath = temp.path() + "/legacy-services.json"; write(legacyPath, QJsonDocument(legacyConfig).toJson());
+    AiSettingsStore legacyStore(legacyPath, secrets);
+    check(legacyStore.load(&reopened, &error) && reopened.cameraTextPresetPath.isEmpty(), "older settings without a preset field keep the built-in default");
     const auto oldSecrets = secrets->data;
     secrets->failAt = secrets->writes + 2;
     check(!store.save(&settings, "replacement-one", "replacement-two", &error)
@@ -144,6 +149,11 @@ int main(int argc, char **argv) {
     secrets->failAt = -1;
     check(!store.save(&settings, "bad\nheader", "", &error) && read(configPath) == before,
         "newline in a key is rejected before persisting anything");
+    settings.cameraTextPresetPath = temp.path() + "/missing-preset.json";
+    const int writesBeforeInvalidPreset = secrets->writes;
+    check(!store.save(&settings, "replacement", "", &error) && read(configPath) == before
+        && secrets->writes == writesBeforeInvalidPreset, "invalid text preset is rejected before credentials or settings are written");
+    settings.cameraTextPresetPath.clear();
     check(store.save(&settings, "replacement", "", &error) && secrets->data.size() == 1
         && settings.comfyUiKeyRef.isEmpty(), "replacing and clearing keys removes obsolete credential entries");
     const QString broken = temp.path() + "/corrupt.json";
@@ -262,6 +272,11 @@ int main(int argc, char **argv) {
         check(dialog.result() != QDialog::Accepted && uiSecrets->data.isEmpty(),
             "invalid generation profile is rejected before committing service credentials");
         dialog.findChild<QLineEdit *>("cameraGenerationProfile")->clear();
+        dialog.findChild<QLineEdit *>("cameraTextPreset")->setText(temp.path() + "/missing-preset.json");
+        dialog.findChild<QPushButton *>("saveAiSettings")->click();
+        check(dialog.result() != QDialog::Accepted && uiSecrets->data.isEmpty(),
+            "settings dialog rejects missing selected text presets before committing credentials");
+        dialog.findChild<QPushButton *>("clearCameraTextPreset")->click();
         dialog.findChild<QPushButton *>("saveAiSettings")->click();
         check(dialog.result() == QDialog::Accepted && !read(uiPath).contains("synthetic-ui-key"),
             "Save commits a settings draft without storing its key in JSON");
@@ -288,6 +303,18 @@ int main(int argc, char **argv) {
         QCoreApplication::processEvents();
         check(dialog.grab().save(QCoreApplication::applicationDirPath() + "/ai-generation-settings-preview.png"),
             "capture generation profile settings preview");
+        dialog.findChild<QTabWidget *>()->setCurrentIndex(2);
+        QCoreApplication::processEvents();
+        check(dialog.grab().save(QCoreApplication::applicationDirPath() + "/ai-preset-settings-preview.png"),
+            "capture optional text preset settings preview");
+        const int beforePreview = fixture.requests.size();
+        dialog.findChild<QPushButton *>("previewCameraTextPreset")->click();
+        auto *preview = dialog.findChild<QDialog *>("cameraPresetPreview");
+        auto *messages = dialog.findChild<QPlainTextEdit *>("cameraPresetMessages");
+        check(preview && messages && messages->isReadOnly() && messages->toPlainText().contains("used_fact_ids")
+            && messages->toPlainText().contains("Example only") && fixture.requests.size() == beforePreview,
+            "local preview shows the actual assembly contract with example input and no API request");
+        if (preview) preview->reject();
     }
     const auto savedUi = read(uiPath);
     uiSecrets->data.clear();
