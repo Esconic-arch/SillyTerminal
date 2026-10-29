@@ -23,13 +23,13 @@ const QString help =
     "Up / Down           Select an entry\n"
     "PageUp / PageDown   Scroll the file list\n"
     "Home / End          First / last entry\n"
-    "Enter               Enter a directory or view a text file\n"
+    "Enter               Enter a directory or view a file\n"
     "Backspace           Parent directory\n"
     "Insert              Mark / unmark an entry and move down\n"
     "Alt+C               Change directory\n"
     "Alt+.               Show / hide dotfiles\n"
     "Ctrl+R              Reload both panels\n\n"
-    "F3                  View UTF-8 text in the pager\n"
+    "F3                  View text, or open an associated image viewer\n"
     "F4                  Edit UTF-8 text with Vim\n"
     "F5                  Copy to the other panel (or enter a destination)\n"
     "F6                  Move / rename (enter a path in the dialog)\n"
@@ -284,6 +284,13 @@ void McFileManager::view(bool edit) {
     if (!item || item->data(0, nameRole).toString() == "..") return;
     if (item->data(0, directoryRole).toBool()) { m_status->setText("Select a text file"); return; }
     const QString path = absolute(item->data(0, nameRole).toString(), m_active);
+    if (!edit && viewFile) {
+        hide();
+        const bool handled = viewFile(path);
+        show();
+        raise();
+        if (handled) { refreshAll(); focusPanel(); return; }
+    }
     const auto text = m_core.readTextFile(path);
     if (text.error) { m_status->setText(text.text); return; }
     const auto callback = edit ? editText : viewText;

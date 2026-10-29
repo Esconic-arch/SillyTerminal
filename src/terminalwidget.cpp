@@ -3,6 +3,7 @@
 #include "textbrowser.h"
 #include "textpager.h"
 #include "mcfilemanager.h"
+#include "imageviewer.h"
 #include "terminalappearance.h"
 #include "cameradialog.h"
 
@@ -152,6 +153,7 @@ void TerminalWidget::submit() {
         setFocus();
     }
     if (result.openFileManager) openFileManager(result.managerPaths);
+    if (result.openImageViewer) openImages(result.imagePaths);
     if (!result.editPath.isEmpty()) openVim(result.editPath);
     if (result.openPager) openPager(result.pagerTitle, result.output);
     else if (!result.output.isEmpty()) write(result.output, foreground);
@@ -429,6 +431,7 @@ void TerminalWidget::applyAppearance(const QFont &chosenFont, int lineSpacing, b
     if (m_browser) m_browser->setAppearance(chosenFont, m_lineSpacing);
     if (m_pager) m_pager->setAppearance(chosenFont, m_lineSpacing);
     if (m_fileManager) m_fileManager->setAppearance(chosenFont, m_lineSpacing);
+    if (m_imageViewer) m_imageViewer->setAppearance(chosenFont);
     if (m_historySearch) m_historySearch->setFont(chosenFont);
     if (m_historySearchLabel) { m_historySearchLabel->setFont(chosenFont); layoutHistorySearch(); }
     if (save) {
@@ -446,6 +449,7 @@ void TerminalWidget::resizeEvent(QResizeEvent *event) {
     if (m_browser) m_browser->setGeometry(rect());
     if (m_pager) m_pager->setGeometry(rect());
     if (m_fileManager) m_fileManager->setGeometry(rect());
+    if (m_imageViewer) m_imageViewer->setGeometry(rect());
     if (m_historySearchLabel) layoutHistorySearch();
 }
 
@@ -454,6 +458,11 @@ void TerminalWidget::openFileManager(const QStringList &paths) {
     m_fileManager = new McFileManager(m_core, paths, font(), m_lineSpacing, [&loop] { loop.quit(); }, this);
     m_fileManager->viewText = [this](const QString &path, const QString &content) { openPager(path, content); };
     m_fileManager->editText = [this](const QString &path, const QString &) { openVim(path); };
+    m_fileManager->viewFile = [this](const QString &path) {
+        if (!ImageViewer::supportsFileName(path)) return false;
+        openImages({path});
+        return true;
+    };
     m_fileManager->setGeometry(rect());
     m_fileManager->show();
     m_fileManager->raise();
@@ -461,6 +470,19 @@ void TerminalWidget::openFileManager(const QStringList &paths) {
     loop.exec();
     delete m_fileManager;
     m_fileManager = nullptr;
+    setFocus();
+}
+
+void TerminalWidget::openImages(const QStringList &paths) {
+    QEventLoop loop;
+    m_imageViewer = new ImageViewer(m_core, paths, font(), [&loop] { loop.quit(); }, this);
+    m_imageViewer->setGeometry(rect());
+    m_imageViewer->show();
+    m_imageViewer->raise();
+    m_imageViewer->focusImage();
+    loop.exec();
+    delete m_imageViewer;
+    m_imageViewer = nullptr;
     setFocus();
 }
 

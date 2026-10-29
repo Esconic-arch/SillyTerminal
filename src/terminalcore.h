@@ -26,6 +26,8 @@ struct CommandResult {
     QStringList managerPaths;
     bool openCamera = false;
     QString cameraAddress;
+    bool openImageViewer = false;
+    QStringList imagePaths;
 };
 
 struct WorldEntry {
@@ -38,6 +40,12 @@ struct WorldEntry {
 struct WorldDirectory {
     QString path;
     QList<WorldEntry> entries;
+    QString error;
+};
+
+struct WorldFile {
+    QString path;
+    QByteArray bytes;
     QString error;
 };
 
@@ -76,6 +84,7 @@ public:
     // Structured access for programs; uses the same world boundary as shell commands.
     WorldDirectory listDirectory(const QString &path) const;
     CommandResult readTextFile(const QString &path) const;
+    WorldFile readBinaryFile(const QString &path, qint64 maximumBytes = 20 * 1024 * 1024) const;
     CommandResult copyEntry(const QString &source, const QString &destination);
     CommandResult moveEntry(const QString &source, const QString &destination);
     CommandResult removeEntry(const QString &path);

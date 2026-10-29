@@ -16,6 +16,7 @@ class QLineEdit;
 class QLabel;
 class TextPager;
 class McFileManager;
+class ImageViewer;
 
 class TerminalWidget : public QTextEdit {
 public:
@@ -54,6 +55,7 @@ private:
     TextBrowser *m_browser = nullptr;
     TextPager *m_pager = nullptr;
     McFileManager *m_fileManager = nullptr;
+    ImageViewer *m_imageViewer = nullptr;
 
     QString currentInput() const;
     void setInput(const QString &text);
@@ -73,4 +75,5 @@ private:
     void openBrowser(const QString &address);
     void openPager(const QString &title, const QString &content);
     void openFileManager(const QStringList &paths);
+    void openImages(const QStringList &paths);
 };

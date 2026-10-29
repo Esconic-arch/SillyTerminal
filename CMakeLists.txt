@@ -115,9 +115,13 @@ add_library(camera_ui src/cameradialog.cpp src/cameradialog.h)
 target_link_libraries(camera_ui PUBLIC camera_core terminal_core Qt6::Widgets)
 target_include_directories(camera_ui PUBLIC src)
 
+add_library(image_viewer src/imageviewer.cpp src/imageviewer.h)
+target_link_libraries(image_viewer PUBLIC terminal_core Qt6::Widgets)
+target_include_directories(image_viewer PUBLIC src)
+
 add_library(terminal_ui src/terminalwidget.cpp src/terminalwidget.h src/textpager.cpp src/textpager.h
     src/terminalappearance.cpp src/terminalappearance.h)
-target_link_libraries(terminal_ui PUBLIC terminal_core vim_editor text_browser mc_file_manager camera_ui Qt6::Widgets)
+target_link_libraries(terminal_ui PUBLIC terminal_core vim_editor text_browser mc_file_manager image_viewer camera_ui Qt6::Widgets)
 target_include_directories(terminal_ui PUBLIC src)
 
 add_library(local_session src/loginwidget.cpp src/loginwidget.h src/sessionwidget.cpp src/sessionwidget.h)
@@ -138,6 +142,10 @@ set_target_properties(SillyTerminal PROPERTIES
 
 include(CTest)
 if(BUILD_TESTING)
+    add_executable(image_viewer_tests tests/image_viewer_tests.cpp)
+    target_link_libraries(image_viewer_tests PRIVATE terminal_ui)
+    add_test(NAME image_viewer COMMAND image_viewer_tests)
+    set_tests_properties(image_viewer PROPERTIES TIMEOUT 25 ENVIRONMENT "QT_FORCE_STDERR_LOGGING=1")
     add_executable(ai_camera_tests tests/ai_camera_tests.cpp)
     target_link_libraries(ai_camera_tests PRIVATE ai_camera_provider)
     add_test(NAME ai_camera COMMAND ai_camera_tests)
