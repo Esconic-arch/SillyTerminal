@@ -1,5 +1,6 @@
 #include "aisettingsdialog.h"
 #include "aicameraprofile.h"
+#include "aipromptpreset.h"
 
 #include <QComboBox>
 #include <QDialogButtonBox>
@@ -10,7 +11,9 @@
 #include <QGroupBox>
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QJsonDocument>
 #include <QLineEdit>
+#include <QPlainTextEdit>
 #include <QPalette>
 #include <QPushButton>
 #include <QSignalBlocker>
@@ -190,6 +193,71 @@ AiSettingsDialog::AiSettingsDialog(QWidget *parent, const AiSettingsStore &store
         showStatus(profileStatus, "Example exported. Replace its checkpoint and adapt the workflow and bindings before saving.", true);
     });
     connect(m_cameraProfile, &QLineEdit::textChanged, profileStatus, &QLabel::clear);
+    auto *presetPage = new QWidget(tabs);
+    auto *presetLayout = new QVBoxLayout(presetPage);
+    tabs->addTab(presetPage, "Text preset");
+    auto *presetExplanation = new QLabel("Optional prompt modules for the camera's DeepSeek description step. "
+        "Leave this empty to use the built-in camera instructions.\n\n"
+        "Export the empty template, fill the modules you need and enable them. "
+        "Native preset v1 supports system guidance and user/assistant examples around the snapshot. "
+        "SillyTavern presets, macros and extension scripts require a separate importer.", presetPage);
+    presetExplanation->setWordWrap(true);
+    presetLayout->addWidget(presetExplanation);
+    auto *presetRow = new QHBoxLayout;
+    m_cameraTextPreset = new QLineEdit(presetPage);
+    m_cameraTextPreset->setObjectName("cameraTextPreset");
+    m_cameraTextPreset->setPlaceholderText("Built-in camera instructions (no extra preset)");
+    auto *browsePreset = new QPushButton("Browse...", presetPage); browsePreset->setAutoDefault(false);
+    presetRow->addWidget(m_cameraTextPreset, 1); presetRow->addWidget(browsePreset); presetLayout->addLayout(presetRow);
+    auto *presetButtons = new QHBoxLayout;
+    auto *exportPreset = new QPushButton("Export template...", presetPage);
+    auto *previewPreset = new QPushButton("Check / preview", presetPage);
+    previewPreset->setObjectName("previewCameraTextPreset");
+    auto *clearPreset = new QPushButton("Use built-in", presetPage); clearPreset->setObjectName("clearCameraTextPreset");
+    for (auto *button : {exportPreset, previewPreset, clearPreset}) { button->setAutoDefault(false); presetButtons->addWidget(button); }
+    presetButtons->addStretch(); presetLayout->addLayout(presetButtons);
+    auto *presetStatus = statusLabel("cameraTextPresetStatus", presetPage); presetLayout->addWidget(presetStatus);
+    presetLayout->addStretch();
+    auto *presetNote = new QLabel("Preview checks local files only and uses example input. "
+        "Save applies your selection to new captures. Each capture keeps its preset and assembled messages for retries. "
+        "Deleting or changing the source file affects new captures; an invalid selected preset stops generation before an API request.", presetPage);
+    presetNote->setWordWrap(true); presetLayout->addWidget(presetNote);
+    connect(browsePreset, &QPushButton::clicked, this, [this] {
+        const auto path = QFileDialog::getOpenFileName(this, "Choose camera text preset", m_cameraTextPreset->text(), "JSON files (*.json)");
+        if (!path.isEmpty()) m_cameraTextPreset->setText(path);
+    });
+    connect(clearPreset, &QPushButton::clicked, m_cameraTextPreset, &QLineEdit::clear);
+    connect(m_cameraTextPreset, &QLineEdit::textChanged, presetStatus, &QLabel::clear);
+    connect(exportPreset, &QPushButton::clicked, this, [this, presetStatus] {
+        const auto path = QFileDialog::getSaveFileName(this, "Export empty text preset", "camera-text-preset.json", "JSON files (*.json)");
+        if (path.isEmpty()) return;
+        QFile input(":/ai/prompt-preset.example.json"); QSaveFile output(path); output.setDirectWriteFallback(false);
+        if (!input.open(QIODevice::ReadOnly)) { showStatus(presetStatus, "Cannot read the bundled preset template."); return; }
+        const auto bytes = input.readAll();
+        if (!output.open(QIODevice::WriteOnly) || output.write(bytes) != bytes.size() || !output.commit()) {
+            showStatus(presetStatus, "Cannot export the preset template."); return;
+        }
+        m_cameraTextPreset->setText(path);
+        showStatus(presetStatus, "Empty template exported. Fill and enable modules when ready, then Save.", true);
+    });
+    connect(previewPreset, &QPushButton::clicked, this, [this, presetStatus] {
+        QJsonObject preset, profile; QJsonArray messages; QString error;
+        if (!AiPromptPreset::load(m_cameraTextPreset->text().trimmed(), &preset, &error)
+            || (!m_cameraProfile->text().trimmed().isEmpty() && !AiCameraProfile::load(m_cameraProfile->text().trimmed(), &profile, &error))
+            || !AiCameraProfile::messages(profile, preset, QJsonObject{{"preview", "Example only. The complete frozen snapshot is supplied at capture time."}}, &messages, &error)) {
+            showStatus(presetStatus, error); return;
+        }
+        showStatus(presetStatus, "Preset is valid. Preview uses example input; no API request was sent.", true);
+        auto *preview = new QDialog(this); preview->setObjectName("cameraPresetPreview");
+        preview->setAttribute(Qt::WA_DeleteOnClose); preview->setWindowTitle("Camera text messages - example input");
+        preview->resize(760, 480); preview->setModal(true);
+        auto *previewLayout = new QVBoxLayout(preview);
+        auto *text = new QPlainTextEdit(preview); text->setObjectName("cameraPresetMessages"); text->setReadOnly(true);
+        text->setPlainText(QString::fromUtf8(QJsonDocument(messages).toJson())); previewLayout->addWidget(text);
+        auto *buttons = new QDialogButtonBox(QDialogButtonBox::Close, preview);
+        connect(buttons, &QDialogButtonBox::rejected, preview, &QDialog::reject); previewLayout->addWidget(buttons);
+        preview->show();
+    });
     auto *note = new QLabel("Tests check API access only; they do not generate text or images.\n"
         "Keys are saved in Windows Credential Manager or macOS Keychain.\n"
         "These settings belong to the application, outside the simulated computer.", this);
@@ -212,6 +280,7 @@ AiSettingsDialog::AiSettingsDialog(QWidget *parent, const AiSettingsStore &store
     m_model->setEditText(m_settings.deepSeekModel);
     m_timeout->setValue(m_settings.timeoutSeconds);
     m_cameraProfile->setText(m_settings.cameraProfilePath);
+    m_cameraTextPreset->setText(m_settings.cameraTextPresetPath);
     QString key;
     if (!loaded) {
         showStatus(m_status, error);
@@ -220,6 +289,7 @@ AiSettingsDialog::AiSettingsDialog(QWidget *parent, const AiSettingsStore &store
         m_comfyUiGroup->setEnabled(false);
         m_timeout->setEnabled(false);
         generation->setEnabled(false);
+        presetPage->setEnabled(false);
     } else {
         if (m_store.readKey(m_settings.deepSeekKeyRef, &key, &error)) m_deepSeekKey->setText(key);
         else {
@@ -290,6 +360,7 @@ void AiSettingsDialog::save() {
     settings.comfyUiUrl = m_comfyUiUrl->text();
     settings.timeoutSeconds = m_timeout->value();
     settings.cameraProfilePath = m_cameraProfile->text().trimmed();
+    settings.cameraTextPresetPath = m_cameraTextPreset->text().trimmed();
     QString error;
     if (!m_store.save(&settings, m_deepSeekKey->text(), m_comfyUiKey->text(), &error)) {
         showStatus(m_status, error); return;

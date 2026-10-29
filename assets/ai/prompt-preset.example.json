@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "name": "Camera preset - ready for your modules",
+  "modules": [
+    {"id": "system-guidance", "enabled": false, "role": "system", "position": "before_input", "content": ""},
+    {"id": "example-user", "enabled": false, "role": "user", "position": "before_input", "content": ""},
+    {"id": "example-assistant", "enabled": false, "role": "assistant", "position": "before_input", "content": ""},
+    {"id": "final-guidance", "enabled": false, "role": "user", "position": "after_input", "content": ""}
+  ]
+}

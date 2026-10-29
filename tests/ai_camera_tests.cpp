@@ -1,5 +1,6 @@
 #include "aicameraimageprovider.h"
 #include "aicameraprofile.h"
+#include "aipromptpreset.h"
 #include "cameracore.h"
 #include <QGuiApplication>
 #include <QBuffer>
@@ -97,7 +98,13 @@ public:
                         ++texts; textRequests.append(request); textAuth = header;
                         if (stallText) return;
                         if (textStatus != 200) { respond(textStatus, "reflected synthetic-secret"); return; }
-                        const auto source = QJsonDocument::fromJson(request.value("messages").toArray().at(1).toObject().value("content").toString().toUtf8()).object();
+                        QJsonObject source;
+                        for (const auto &value : request.value("messages").toArray()) {
+                            const QString content = value.toObject().value("content").toString();
+                            const QString marker = "<task_input>\n";
+                            const auto begin = content.indexOf(marker), end = content.indexOf("\n</task_input>", begin + marker.size());
+                            if (begin >= 0 && end >= 0) source = QJsonDocument::fromJson(content.mid(begin + marker.size(), end - begin - marker.size()).toUtf8()).object();
+                        }
                         QJsonArray ids;
                         for (const auto &fact : source.value("scene").toObject().value("visible_facts").toArray()) ids.append(fact.toObject().value("id"));
                         const QString description = QString::fromUtf8(QJsonDocument(QJsonObject{{"prompt", reflectKey ? "synthetic-secret" : "A fixed indoor camera photograph."},
@@ -309,6 +316,54 @@ int main(int argc, char **argv) {
     auto invalidBindings = profile(); auto bindings = invalidBindings.value("bindings").toObject();
     bindings.insert("prompt", QJsonObject{{"node", "9"}, {"input", "images"}}); invalidBindings.insert("bindings", bindings);
     check(!AiCameraProfile::validate(invalidBindings, &error), "bindings cannot overwrite node connections with model output");
+    const QString presetPath = temp.path() + "/camera-preset.json";
+    auto textPreset = AiPromptPreset::empty();
+    textPreset.insert("name", "Frozen preset");
+    textPreset.insert("modules", QJsonArray{QJsonObject{{"id", "style"}, {"role", "system"},
+        {"position", "before_input"}, {"enabled", true}, {"content", "ORIGINAL PRESET GUIDANCE"}},
+        QJsonObject{{"id", "example-user"}, {"role", "user"}, {"position", "before_input"}, {"enabled", true}, {"content", "An example scene."}},
+        QJsonObject{{"id", "example-assistant"}, {"role", "assistant"}, {"position", "before_input"}, {"enabled", true}, {"content", "An example description."}}});
+    writeObject(presetPath, textPreset); config.cameraTextPresetPath = presetPath;
+    check(store.save(&config, "synthetic-secret", "synthetic-proxy", &error), "save a native camera preset using synthetic credentials");
+    service.textStatus = 401;
+    const auto presetSnapshot = snapshot(); const auto presetTask = provider->submit(presetSnapshot);
+    const QString presetJobPath = root + "/jobs/" + presetTask.id + ".json";
+    const auto frozenRequest = object(presetJobPath).value("text_request").toObject();
+    auto newPreset = AiPromptPreset::empty(); newPreset.insert("name", "NEW PRESET"); writeObject(presetPath, newPreset);
+    check(frozenRequest.value("preset").toObject() == textPreset && waitState(*provider, presetTask.id, "failed")
+        && service.textRequests.last().value("messages") == frozenRequest.value("messages"),
+        "submit freezes preset and full messages before a later source edit or asynchronous request");
+    service.textStatus = 200; QFile::remove(presetPath);
+    check(provider->retry(presetTask.id, presetSnapshot).state == "queued" && waitState(*provider, presetTask.id, "completed")
+        && service.textRequests.last().value("messages") == frozenRequest.value("messages"),
+        "a failed description retries the frozen messages after its preset source has been deleted");
+    const int textsBeforeMissingPreset = service.texts, readsBeforeMissingPreset = secrets->reads;
+    const auto missingPresetSnapshot = snapshot(); const auto missingPresetTask = provider->submit(missingPresetSnapshot);
+    check(missingPresetTask.state == "failed" && service.texts == textsBeforeMissingPreset && secrets->reads == readsBeforeMissingPreset,
+        "a missing selected preset fails locally before credential access or paid generation");
+    writeObject(presetPath, newPreset);
+    check(provider->retry(missingPresetTask.id, missingPresetSnapshot).state == "queued" && waitState(*provider, missingPresetTask.id, "completed"),
+        "correcting an invalid configuration allows explicit retry of the previously unconfigured task");
+    check(object(root + "/jobs/" + missingPresetTask.id + ".json").value("text_request").toObject().value("preset").toObject() == newPreset,
+        "newly configured captures use the currently selected preset version");
+    writeObject(presetPath, textPreset); service.textStatus = 401;
+    const auto legacySnapshot = snapshot(); const auto legacyTask = provider->submit(legacySnapshot);
+    check(waitState(*provider, legacyTask.id, "failed"), "prepare a failed description record for legacy compatibility");
+    const QString legacyPath = root + "/jobs/" + legacyTask.id + ".json";
+    auto legacyRecord = object(legacyPath); legacyRecord.remove("text_request"); legacyRecord.remove("text_request_sha256");
+    writeObject(legacyPath, legacyRecord); service.textStatus = 200;
+    check(provider->retry(legacyTask.id, legacySnapshot).state == "queued" && waitState(*provider, legacyTask.id, "completed")
+        && object(legacyPath).value("text_request").toObject().value("preset").toObject() == AiPromptPreset::empty()
+        && !QJsonDocument(service.textRequests.last()).toJson().contains("ORIGINAL PRESET GUIDANCE"),
+        "pre-preset captures retry with built-in instructions rather than the newly selected preset");
+    auto tampered = object(presetJobPath); auto textRequest = tampered.value("text_request").toObject();
+    textRequest.insert("messages", QJsonArray{}); tampered.insert("text_request", textRequest); writeObject(presetJobPath, tampered);
+    const int beforeTamper = service.texts;
+    check(provider->recover(presetTask.id).state == "uncertain" && service.texts == beforeTamper,
+        "inconsistent external edits to frozen preset messages are preserved and rejected");
+    QFile presetExample(":/ai/prompt-preset.example.json");
+    check(presetExample.open(QIODevice::ReadOnly) && AiPromptPreset::validate(QJsonDocument::fromJson(presetExample.readAll()).object(), &error),
+        "the empty preset template is bundled and immediately valid");
     std::printf("AI camera checks: %d, failures: %d\n", checks, failures);
     return failures ? 1 : 0;
 }

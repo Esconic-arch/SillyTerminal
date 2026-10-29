@@ -1,5 +1,6 @@
 #include "aiservices.h"
 #include "aicameraprofile.h"
+#include "aipromptpreset.h"
 
 #include <QDir>
 #include <QFile>
@@ -59,6 +60,9 @@ bool AiSettingsStore::load(AiServiceSettings *settings, QString *error) const {
     if (object.contains("camera_profile") && !object.value("camera_profile").isString())
         return fail("Invalid camera profile path in AI settings.", error);
     settings->cameraProfilePath = object.value("camera_profile").toString();
+    if (object.contains("camera_text_preset") && !object.value("camera_text_preset").isString())
+        return fail("Invalid camera text preset path in AI settings.", error);
+    settings->cameraTextPresetPath = object.value("camera_text_preset").toString();
     return true;
 }
 
@@ -82,6 +86,10 @@ bool AiSettingsStore::save(AiServiceSettings *settings, const QString &deepSeekK
         QJsonObject profile;
         if (!AiCameraProfile::load(settings->cameraProfilePath, &profile, error)) return false;
     }
+    QJsonObject preset;
+    if (!AiPromptPreset::load(settings->cameraTextPresetPath, &preset, error)) return false;
+    QJsonArray messages;
+    if (!AiPromptPreset::compose(preset, "Task instructions", "Preview input", "Return JSON.", &messages, error)) return false;
     if (deepSeekKey.contains('\r') || deepSeekKey.contains('\n')
         || comfyUiKey.contains('\r') || comfyUiKey.contains('\n')
         || deepSeekKey.toUtf8().size() > 2048 || comfyUiKey.toUtf8().size() > 2048)
@@ -112,7 +120,8 @@ bool AiSettingsStore::save(AiServiceSettings *settings, const QString &deepSeekK
     const QJsonObject object{{"version", 1}, {"deepseek_url", next.deepSeekUrl},
         {"deepseek_model", next.deepSeekModel}, {"deepseek_key_ref", next.deepSeekKeyRef},
         {"comfyui_url", next.comfyUiUrl}, {"comfyui_key_ref", next.comfyUiKeyRef},
-        {"timeout_seconds", next.timeoutSeconds}, {"camera_profile", next.cameraProfilePath}};
+        {"timeout_seconds", next.timeoutSeconds}, {"camera_profile", next.cameraProfilePath},
+        {"camera_text_preset", next.cameraTextPresetPath}};
     const auto bytes = QJsonDocument(object).toJson();
     QSaveFile file(m_filePath);
     file.setDirectWriteFallback(false);

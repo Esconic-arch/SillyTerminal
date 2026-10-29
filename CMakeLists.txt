@@ -12,12 +12,13 @@ add_library(local_account src/accountstore.cpp src/accountstore.h src/localident
 target_link_libraries(local_account PUBLIC Qt6::Core PRIVATE Qt6::Network)
 target_include_directories(local_account PUBLIC src)
 
-add_library(ai_services src/aiservices.cpp src/aiservices.h src/aicredentials.cpp src/aicameraprofile.cpp src/aicameraprofile.h)
+add_library(ai_services src/aiservices.cpp src/aiservices.h src/aicredentials.cpp src/aicameraprofile.cpp src/aicameraprofile.h
+    src/aipromptpreset.cpp src/aipromptpreset.h)
 target_link_libraries(ai_services PUBLIC Qt6::Network)
 target_include_directories(ai_services PUBLIC src)
 qt_add_resources(ai_services ai_profile_example
     PREFIX "/ai" BASE "${CMAKE_CURRENT_SOURCE_DIR}/assets/ai"
-    FILES assets/ai/camera-profile.example.json)
+    FILES assets/ai/camera-profile.example.json assets/ai/prompt-preset.example.json)
 if(WIN32)
     target_link_libraries(ai_services PRIVATE advapi32)
 elseif(APPLE)
@@ -138,6 +139,10 @@ set_target_properties(SillyTerminal PROPERTIES
 
 include(CTest)
 if(BUILD_TESTING)
+    add_executable(ai_prompt_preset_tests tests/ai_prompt_preset_tests.cpp)
+    target_link_libraries(ai_prompt_preset_tests PRIVATE ai_services)
+    target_compile_definitions(ai_prompt_preset_tests PRIVATE PRESET_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+    add_test(NAME ai_prompt_preset COMMAND ai_prompt_preset_tests)
     add_executable(ai_camera_tests tests/ai_camera_tests.cpp)
     target_link_libraries(ai_camera_tests PRIVATE ai_camera_provider)
     add_test(NAME ai_camera COMMAND ai_camera_tests)
