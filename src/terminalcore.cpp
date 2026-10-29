@@ -20,7 +20,7 @@
 #include <functional>
 
 namespace {
-const QStringList commands = {"browser", "camera", "cat", "cd", "clear", "cp", "echo", "exit", "grep", "help", "history", "less", "logout", "ls",
+const QStringList commands = {"browser", "camera", "cat", "cd", "clear", "cp", "echo", "exit", "feh", "grep", "help", "history", "less", "logout", "ls",
     "mc", "mkdir", "mv", "pwd", "rm", "touch", "vim", "whoami"};
 constexpr int historyLimit = 1000;
 CommandResult fail(const QString &message, int status = 1) {
@@ -429,6 +429,26 @@ WorldDirectory TerminalCore::listDirectory(const QString &path) const {
 }
 
 CommandResult TerminalCore::readTextFile(const QString &path) const { return readFile(resolve(path)); }
+WorldFile TerminalCore::readBinaryFile(const QString &path, qint64 maximumBytes) const {
+    WorldFile result;
+    result.path = resolve(path);
+    const QString native = physicalPath(result.path, result.error);
+    if (!result.error.isEmpty()) return result;
+    const QFileInfo info(native);
+    if (!info.exists()) result.error = result.path + ": no such file or directory";
+    else if (!info.isFile()) result.error = result.path + ": not a regular file";
+    else if (maximumBytes <= 0 || maximumBytes > 64 * 1024 * 1024 || info.size() > maximumBytes)
+        result.error = result.path + ": file exceeds the supported size limit";
+    if (!result.error.isEmpty()) return result;
+    QFile file(native);
+    if (!file.open(QIODevice::ReadOnly)) { result.error = result.path + ": " + file.errorString(); return result; }
+    // Bound the read itself as well, in case an external editor grows the file.
+    result.bytes = file.read(maximumBytes + 1);
+    if (file.error() != QFileDevice::NoError) result.error = result.path + ": " + file.errorString();
+    else if (result.bytes.size() > maximumBytes) result.error = result.path + ": file exceeds the supported size limit";
+    if (!result.error.isEmpty()) result.bytes.clear();
+    return result;
+}
 CommandResult TerminalCore::copyEntry(const QString &source, const QString &destination) {
     return transfer("cp", {"-r", "--", source, destination});
 }
@@ -542,7 +562,7 @@ CommandResult TerminalCore::executePipeline(const QString &line) {
         const QString command = stage.words.first();
         if (stages.size() > 1 && commands.contains(command) && !textCommands.contains(command))
             return fail(command + ": this command cannot be used in a pipeline");
-        if ((command == "browser" || command == "camera" || command == "vim" || command == "mc" || command == "clear"
+        if ((command == "browser" || command == "camera" || command == "vim" || command == "mc" || command == "feh" || command == "clear"
             || command == "exit" || command == "logout")
             && !stage.redirects.isEmpty()) return fail(command + ": redirection is not supported for this interactive command");
         if (command == "history" && stage.words.contains("-c") && stages.size() > 1)
@@ -672,6 +692,28 @@ CommandResult TerminalCore::executeCommand(const QString &command, QStringList a
         if (!args.isEmpty()) result.browserUrl = args.first();
         return result;
     }
+    if (command == "feh") {
+        if (args == QStringList{"--help"} || args == QStringList{"-h"})
+            return {"Usage: feh [--] [file|directory ...]\n"
+                "View local PNG/JPEG images. No arguments browses the current directory.\n"
+                "Directories are scanned once, without recursion. F1 shows supported keys.\n"
+                "This version is read-only; other feh options are not implemented."};
+        bool literal = false;
+        QStringList paths;
+        for (const auto &arg : args) {
+            if (!literal && arg == "--") { literal = true; continue; }
+            if (!literal && arg.startsWith('-')) return fail("feh: unsupported option " + arg + "; use feh --help");
+            QString error;
+            const QString path = resolve(arg);
+            physicalPath(path, error);
+            if (!error.isEmpty()) return fail("feh: " + error);
+            paths.append(path);
+        }
+        CommandResult result;
+        result.openImageViewer = true;
+        result.imagePaths = paths.isEmpty() ? QStringList{m_currentPath} : paths;
+        return result;
+    }
     if (command == "mc") {
         if (args == QStringList{"--help"} || args == QStringList{"-h"})
             return {"Usage: mc [directory [other-directory]]\n"
@@ -696,6 +738,7 @@ CommandResult TerminalCore::executeCommand(const QString &command, QStringList a
             "  browser [address]    Open the web browser\n"
             "  camera [address]     Open the camera snapshot client\n"
             "  mc [dir [other]]     Open the two-panel file manager\n"
+            "  feh [file|dir ...]   View local PNG/JPEG images\n"
             "  ls [-a] [path]       List files and directories\n"
             "  cd [path]            Change directory; no path returns home\n"
             "  pwd                  Print the current directory\n"

@@ -20,6 +20,9 @@ public:
     void setAppearance(const QFont &font, int spacing);
     std::function<void(const QString &, const QString &)> viewText;
     std::function<void(const QString &, const QString &)> editText;
+    // The host may handle a non-text file with an installed viewer.
+    // Return false to fall back to the text pager.
+    std::function<bool(const QString &)> viewFile;
 
 protected:
     bool eventFilter(QObject *object, QEvent *event) override;
